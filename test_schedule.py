@@ -1597,3 +1597,137 @@ class SchedulerTests(TestCase):
         scheduler.every()
         scheduler.every(10).seconds
         scheduler.run_pending()
+
+    def test_monthly_scheduling(self):
+        """Test monthly scheduling functionality."""
+        with mock_datetime(2023, 1, 15, 12, 0, 0):
+            mock_job = make_mock_job()
+
+            # Test every().month
+            job = every().month.do(mock_job)
+            assert job.unit == "months"
+            assert job.interval == 1
+
+            # Test every(3).months
+            job = every(3).months.do(mock_job)
+            assert job.unit == "months"
+            assert job.interval == 3
+
+            # Test that next_run is calculated correctly
+            job = every().month.do(mock_job)
+            expected_next_run = datetime.datetime(2023, 2, 15, 12, 0, 0)
+            assert job.next_run == expected_next_run
+
+    def test_yearly_scheduling(self):
+        """Test yearly scheduling functionality."""
+        with mock_datetime(2023, 6, 15, 12, 0, 0):
+            mock_job = make_mock_job()
+
+            # Test every().year
+            job = every().year.do(mock_job)
+            assert job.unit == "years"
+            assert job.interval == 1
+
+            # Test every(2).years
+            job = every(2).years.do(mock_job)
+            assert job.unit == "years"
+            assert job.interval == 2
+
+            # Test that next_run is calculated correctly
+            job = every().year.do(mock_job)
+            expected_next_run = datetime.datetime(2024, 6, 15, 12, 0, 0)
+            assert job.next_run == expected_next_run
+
+    def test_monthly_with_at_time(self):
+        """Test monthly scheduling with specific time."""
+        with mock_datetime(2023, 1, 15, 12, 0, 0):
+            mock_job = make_mock_job()
+
+            # Test every().month.at("10:30")
+            job = every().month.at("10:30").do(mock_job)
+            expected_next_run = datetime.datetime(2023, 2, 15, 10, 30, 0)
+            assert job.next_run == expected_next_run
+
+    def test_yearly_with_at_time(self):
+        """Test yearly scheduling with specific time."""
+        with mock_datetime(2023, 6, 15, 12, 0, 0):
+            mock_job = make_mock_job()
+
+            # Test every().year.at("09:00")
+            job = every().year.at("09:00").do(mock_job)
+            expected_next_run = datetime.datetime(2024, 6, 15, 9, 0, 0)
+            assert job.next_run == expected_next_run
+
+    def test_month_end_edge_cases(self):
+        """Test edge cases with month-end dates."""
+        # Test Jan 31 -> Feb 28 (non-leap year)
+        with mock_datetime(2023, 1, 31, 12, 0, 0):
+            mock_job = make_mock_job()
+            job = every().month.do(mock_job)
+            expected_next_run = datetime.datetime(2023, 2, 28, 12, 0, 0)
+            assert job.next_run == expected_next_run
+
+        # Test Jan 31 -> Feb 29 (leap year)
+        with mock_datetime(2024, 1, 31, 12, 0, 0):
+            mock_job = make_mock_job()
+            job = every().month.do(mock_job)
+            expected_next_run = datetime.datetime(2024, 2, 29, 12, 0, 0)
+            assert job.next_run == expected_next_run
+
+        # Test May 31 -> June 30
+        with mock_datetime(2023, 5, 31, 12, 0, 0):
+            mock_job = make_mock_job()
+            job = every().month.do(mock_job)
+            expected_next_run = datetime.datetime(2023, 6, 30, 12, 0, 0)
+            assert job.next_run == expected_next_run
+
+    def test_leap_year_edge_cases(self):
+        """Test leap year edge cases for yearly scheduling."""
+        # Test Feb 29 -> Feb 28 (leap year to non-leap year)
+        with mock_datetime(2024, 2, 29, 12, 0, 0):
+            mock_job = make_mock_job()
+            job = every().year.do(mock_job)
+            expected_next_run = datetime.datetime(2025, 2, 28, 12, 0, 0)
+            assert job.next_run == expected_next_run
+
+    def test_multiple_months_years(self):
+        """Test scheduling with multiple months/years intervals."""
+        # Test every 3 months
+        with mock_datetime(2023, 1, 15, 12, 0, 0):
+            mock_job = make_mock_job()
+            job = every(3).months.do(mock_job)
+            expected_next_run = datetime.datetime(2023, 4, 15, 12, 0, 0)
+            assert job.next_run == expected_next_run
+
+        # Test every 2 years
+        with mock_datetime(2023, 6, 15, 12, 0, 0):
+            mock_job = make_mock_job()
+            job = every(2).years.do(mock_job)
+            expected_next_run = datetime.datetime(2025, 6, 15, 12, 0, 0)
+            assert job.next_run == expected_next_run
+
+    def test_singular_month_year_validation(self):
+        """Test that singular forms only work with interval=1."""
+        with self.assertRaises(IntervalError):
+            every(2).month.do(make_mock_job())
+
+        with self.assertRaises(IntervalError):
+            every(3).year.do(make_mock_job())
+
+    def test_monthly_yearly_job_execution(self):
+        """Test that monthly and yearly jobs execute correctly."""
+        mock_job = make_mock_job()
+
+        # Test monthly job execution
+        with mock_datetime(2023, 1, 15, 12, 0, 0):
+            job = every().month.do(mock_job)
+
+        # Simulate time passing to next month
+        with mock_datetime(2023, 2, 15, 12, 0, 0):
+            assert job.should_run
+            job.run()
+            assert mock_job.call_count == 1
+
+        # Next run should be in March
+        expected_next_run = datetime.datetime(2023, 3, 15, 12, 0, 0)
+        assert job.next_run == expected_next_run

@@ -28,6 +28,9 @@ Usage:
     >>> schedule.every(5).to(10).days.do(job)
     >>> schedule.every().hour.do(job, message='things')
     >>> schedule.every().day.at("10:30").do(job)
+    >>> schedule.every().month.do(job)  # Run monthly
+    >>> schedule.every(3).months.do(job)  # Run every 3 months
+    >>> schedule.every().year.do(job)  # Run yearly
 
     >>> while True:
     >>>     schedule.run_pending()
@@ -39,6 +42,7 @@ Usage:
 """
 
 from collections.abc import Hashable
+import calendar
 import datetime
 import functools
 import logging
@@ -204,6 +208,37 @@ class Scheduler:
         if not self.next_run:
             return None
         return (self.next_run - datetime.datetime.now()).total_seconds()
+
+
+def _add_months_years(
+    dt: datetime.datetime, months: int = 0, years: int = 0
+) -> datetime.datetime:
+    """
+    Add months and/or years to a datetime, handling edge cases like leap years
+    and month-end dates properly.
+
+    :param dt: The datetime to add to
+    :param months: Number of months to add
+    :param years: Number of years to add
+    :return: New datetime with months/years added
+    """
+    # Calculate the target year and month
+    target_year = dt.year + years
+    target_month = dt.month + months
+
+    # Handle month overflow/underflow
+    while target_month > 12:
+        target_month -= 12
+        target_year += 1
+    while target_month < 1:
+        target_month += 12
+        target_year -= 1
+
+    # Handle day overflow (e.g., Jan 31 + 1 month should be Feb 28/29)
+    max_day = calendar.monthrange(target_year, target_month)[1]
+    target_day = min(dt.day, max_day)
+
+    return dt.replace(year=target_year, month=target_month, day=target_day)
 
 
 class Job:
@@ -378,6 +413,28 @@ class Job:
         return self
 
     @property
+    def month(self):
+        if self.interval != 1:
+            raise IntervalError("Use months instead of month")
+        return self.months
+
+    @property
+    def months(self):
+        self.unit = "months"
+        return self
+
+    @property
+    def year(self):
+        if self.interval != 1:
+            raise IntervalError("Use years instead of year")
+        return self.years
+
+    @property
+    def years(self):
+        self.unit = "years"
+        return self
+
+    @property
     def monday(self):
         if self.interval != 1:
             raise IntervalError(
@@ -490,9 +547,12 @@ class Job:
 
         :return: The invoked job instance
         """
-        if self.unit not in ("days", "hours", "minutes") and not self.start_day:
+        if (
+            self.unit not in ("days", "hours", "minutes", "months", "years")
+            and not self.start_day
+        ):
             raise ScheduleValueError(
-                "Invalid unit (valid units are `days`, `hours`, and `minutes`)"
+                "Invalid unit (valid units are `days`, `hours`, `minutes`, `months`, and `years`)"
             )
 
         if tz is not None:
@@ -701,10 +761,18 @@ class Job:
         """
         Compute the instant when this job should run next.
         """
-        if self.unit not in ("seconds", "minutes", "hours", "days", "weeks"):
+        if self.unit not in (
+            "seconds",
+            "minutes",
+            "hours",
+            "days",
+            "weeks",
+            "months",
+            "years",
+        ):
             raise ScheduleValueError(
                 "Invalid unit (valid units are `seconds`, `minutes`, `hours`, "
-                "`days`, and `weeks`)"
+                "`days`, `weeks`, `months`, and `years`)"
             )
         if self.latest is not None:
             if not (self.latest >= self.interval):
@@ -726,12 +794,25 @@ class Job:
         if self.at_time is not None:
             next_run = self._move_to_at_time(next_run)
 
-        period = datetime.timedelta(**{self.unit: interval})
-        if interval != 1:
-            next_run += period
+        # Handle months and years differently since they can't use timedelta
+        if self.unit in ("months", "years"):
+            if self.unit == "months":
+                if interval != 1:
+                    next_run = _add_months_years(next_run, months=interval)
+                while next_run <= now:
+                    next_run = _add_months_years(next_run, months=interval)
+            else:  # years
+                if interval != 1:
+                    next_run = _add_months_years(next_run, years=interval)
+                while next_run <= now:
+                    next_run = _add_months_years(next_run, years=interval)
+        else:
+            period = datetime.timedelta(**{self.unit: interval})
+            if interval != 1:
+                next_run += period
 
-        while next_run <= now:
-            next_run += period
+            while next_run <= now:
+                next_run += period
 
         next_run = self._correct_utc_offset(
             next_run, fixate_time=(self.at_time is not None)
@@ -756,10 +837,13 @@ class Job:
 
         kwargs = {"second": self.at_time.second, "microsecond": 0}
 
-        if self.unit == "days" or self.start_day is not None:
+        if self.unit in ["days", "months", "years"] or self.start_day is not None:
             kwargs["hour"] = self.at_time.hour
 
-        if self.unit in ["days", "hours"] or self.start_day is not None:
+        if (
+            self.unit in ["days", "hours", "months", "years"]
+            or self.start_day is not None
+        ):
             kwargs["minute"] = self.at_time.minute
 
         moment = moment.replace(**kwargs)  # type: ignore
