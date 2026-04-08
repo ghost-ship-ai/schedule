@@ -1,0 +1,74 @@
+name: Relay CI Failure
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  relay:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.pull_requests[0]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check kill switch
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+          LABELS=$(gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/labels --jq '.[].name' 2>/dev/null || echo "")
+          if echo "$LABELS" | grep -q "manual-review"; then
+            echo "Kill switch active. Skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post CI failure logs on PR
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID="${{ github.event.workflow_run.id }}"
+          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+
+          # Get the failed job logs (truncate to 3000 chars to stay within comment limits)
+          LOGS=$(gh run view "$RUN_ID" --log-failed 2>&1 | tail -100 | head -c 3000 || echo "Could not fetch logs")
+
+          BODY="## CI Failed
+
+          The CI workflow failed on this PR. Here are the relevant logs:
+
+          \`\`\`
+          ${LOGS}
+          \`\`\`
+
+          Ghost Ship AI will attempt to fix this automatically."
+
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY"
+          echo "Posted CI failure logs on PR #${PR_NUMBER}"
+
+      - name: Dispatch fix to Ghost Ship
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -e
+          HTTP_CODE=$(curl -s -o /tmp/dispatch_response -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ secrets.GHOST_SHIP_REPO }}/dispatches" \
+            -d '{
+              "event_type": "address-review",
+              "client_payload": {
+                "repo": "${{ github.repository }}",
+                "pr_number": ${{ github.event.workflow_run.pull_requests[0].number }}
+              }
+            }')
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Dispatch failed with HTTP ${HTTP_CODE}:"
+            cat /tmp/dispatch_response
+            exit 1
+          fi
+          echo "Dispatched address-review for CI failure (HTTP ${HTTP_CODE})"
