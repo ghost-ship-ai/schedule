@@ -1,0 +1,53 @@
+# This workflow is installed on public forks as a required CI check.
+# It rejects any PR that contains human-authored commits.
+
+name: Verify Bot-Only Commits
+
+on:
+  pull_request:
+
+jobs:
+  verify:
+    name: Check commit authors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify all commits are from bots
+        run: |
+          ALLOWED_AUTHORS=(
+            "ghost-ship-ai[bot]"
+            "github-actions[bot]"
+            "renovate[bot]"
+            "dependabot[bot]"
+          )
+
+          echo "Checking commit authors on this PR..."
+
+          VIOLATIONS=""
+          while IFS= read -r author; do
+            ALLOWED=false
+            for allowed in "${ALLOWED_AUTHORS[@]}"; do
+              if [ "$author" = "$allowed" ]; then
+                ALLOWED=true
+                break
+              fi
+            done
+
+            if [ "$ALLOWED" = false ]; then
+              VIOLATIONS="$VIOLATIONS\n  - $author"
+            fi
+          done < <(git log --format='%an' ${{ github.event.pull_request.base.sha }}..HEAD)
+
+          if [ -n "$VIOLATIONS" ]; then
+            echo "REJECTED: Human-authored commits detected:"
+            echo -e "$VIOLATIONS"
+            echo ""
+            echo "This repository only accepts bot-authored commits."
+            echo "See CONTRIBUTING.md for how to contribute."
+            exit 1
+          fi
+
+          echo "All commits are from authorized bot accounts."
