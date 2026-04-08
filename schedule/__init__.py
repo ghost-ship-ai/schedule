@@ -818,6 +818,10 @@ class Job:
             next_run, fixate_time=(self.at_time is not None)
         )
 
+        # Handle DST fall-back transitions: ensure we advance past ambiguous times
+        if self.at_time_zone is not None and self.at_time is not None:
+            next_run = self._advance_past_dst_transition(next_run, now)
+
         # To keep the api consistent with older versions, we have to set the 'next_run' to a naive timestamp in the local timezone.
         # Because we want to stay backwards compatible with older versions.
         if self.at_time_zone is not None:
@@ -861,9 +865,19 @@ class Job:
         Given a datetime, corrects any mistakes in the utc offset.
         This is similar to pytz' normalize, but adds the ability to attempt
         keeping the time-component at the same hour/minute/second.
+
+        During DST transitions, this method handles the 'fold' attribute to
+        disambiguate times that occur twice (fall-back) or don't exist (spring-forward).
         """
         if self.at_time_zone is None:
             return moment
+
+        # Handle DST fall-back transitions by using fold=1 to select the post-transition occurrence
+        # This ensures we advance past the ambiguous time period
+        if hasattr(moment, 'fold') and self._is_dst_fallback_period(moment):
+            # During fall-back, use fold=1 to select the second (post-transition) occurrence
+            moment = moment.replace(fold=1)
+
         # Normalize corrects the utc-offset to match the timezone
         # For example: When a date&time&offset does not exist within a timezone,
         # the normalization will change the utc-offset to where it is valid.
@@ -899,6 +913,65 @@ class Job:
             # to 03:00), this will schedule the job at 03:23.
             moment += offset_diff
         return moment
+
+    def _is_dst_fallback_period(self, moment: datetime.datetime) -> bool:
+        """
+        Check if the given moment is during a DST fall-back transition period.
+
+        During fall-back, clocks are set back (e.g., 3:00 AM becomes 2:00 AM),
+        creating an ambiguous period where times like 2:30 AM occur twice.
+
+        :param moment: The datetime to check
+        :return: True if the moment is in a DST fall-back period
+        """
+        if self.at_time_zone is None:
+            return False
+
+        try:
+            # Create two versions of the same local time with different fold values
+            moment_fold0 = moment.replace(fold=0)
+            moment_fold1 = moment.replace(fold=1)
+
+            # Localize both versions to the timezone
+            localized_fold0 = self.at_time_zone.localize(moment_fold0.replace(tzinfo=None), is_dst=None)
+            localized_fold1 = self.at_time_zone.localize(moment_fold1.replace(tzinfo=None), is_dst=None)
+
+            # If they have different UTC offsets, we're in a fall-back period
+            return localized_fold0.utcoffset() != localized_fold1.utcoffset()
+        except:
+            # If localization fails, we're likely in a spring-forward gap
+            return False
+
+    def _advance_past_dst_transition(self, next_run: datetime.datetime, now: datetime.datetime) -> datetime.datetime:
+        """
+        Ensure that the next_run time advances properly past DST transitions.
+
+        During DST fall-back, if we're scheduling a job that would run during the
+        ambiguous time period, we need to ensure it's scheduled for the post-transition
+        occurrence to avoid getting stuck.
+
+        :param next_run: The calculated next run time
+        :param now: The current time
+        :return: The adjusted next run time
+        """
+        if self.at_time_zone is None:
+            return next_run
+
+        # Check if we're in a DST fall-back situation where next_run might be ambiguous
+        if self._is_dst_fallback_period(next_run):
+            # If the current time is also in the same ambiguous period and has fold=1,
+            # we need to ensure next_run is scheduled for the next day to avoid loops
+            if (hasattr(now, 'fold') and now.fold == 1 and
+                next_run.date() == now.date() and
+                next_run.time() == now.time()):
+                # We're in the second occurrence of the same time - advance to next day
+                next_run = next_run + datetime.timedelta(days=1)
+                next_run = self._correct_utc_offset(next_run, fixate_time=True)
+            else:
+                # Ensure we use fold=1 for the post-transition occurrence
+                next_run = next_run.replace(fold=1)
+
+        return next_run
 
     def _is_overdue(self, when: datetime.datetime):
         return self.cancel_after is not None and when > self.cancel_after
