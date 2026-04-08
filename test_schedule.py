@@ -1588,6 +1588,37 @@ class SchedulerTests(TestCase):
         schedule.clear()
         assert len(schedule.jobs) == 0
 
+    def test_logging_without_str_calls(self):
+        """
+        Test that logging statements work correctly without unnecessary str() calls.
+        This verifies the fix for removing str() calls in logging statements.
+        """
+        import logging
+        from unittest.mock import patch
+
+        # Create a job to test with
+        mock_job = make_mock_job(name="test_job")
+        job = every().second.do(mock_job)
+
+        # Test cancel_job logging with a valid job
+        with patch('schedule.logger') as mock_logger:
+            schedule.cancel_job(job)
+            # Verify that logger.debug was called with the job object directly (not str(job))
+            mock_logger.debug.assert_called_with('Cancelling job "%s"', job)
+
+        # Test cancel_job logging with an invalid job (not in scheduler)
+        with patch('schedule.logger') as mock_logger:
+            schedule.cancel_job(job)  # Job already removed, so this will trigger the ValueError path
+            # Verify that logger.debug was called with the job object directly (not str(job))
+            mock_logger.debug.assert_called_with('Cancelling not-scheduled job "%s"', job)
+
+        # Test job.run() logging
+        job = every().second.do(mock_job)
+        with patch('schedule.logger') as mock_logger:
+            job.run()
+            # Verify that logger.debug was called with self directly (not str(self))
+            mock_logger.debug.assert_called_with("Running job %s", job)
+
     def test_misconfigured_job_wont_break_scheduler(self):
         """
         Ensure an interrupted job definition chain won't break
