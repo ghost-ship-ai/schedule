@@ -1360,6 +1360,16 @@ class SchedulerTests(TestCase):
         s3 = repr(schedule.every(10))
         assert s3 == "Every 10 None do [None] (last run: [never], next run: [never])"
 
+        # Test the specific bug case: interval=1 with unit=None (issue #655)
+        s4 = repr(schedule.every(1))
+        assert s4 == "Every 1 None do [None] (last run: [never], next run: [never])"
+
+        # Test edge case: at_time path with unit=None and interval=1
+        job_with_at_time = schedule.every(1)
+        job_with_at_time.at_time = datetime.time(10, 30)
+        s5 = repr(job_with_at_time)
+        assert s5 == "Every 1 None at 10:30:00 do [None] (last run: [never], next run: [never])"
+
     def test_to_string_lambda_job_func(self):
         assert len(str(every().minute.do(lambda: 1))) > 1
         assert len(str(every().day.at("10:30").do(lambda: 1))) > 1
