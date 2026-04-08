@@ -1,0 +1,38 @@
+LANGUAGE: python
+PACKAGE_MANAGER: pip (python -m pip install -e .)
+WORKING_COMMANDS:
+- python -m pip install -e .
+- python -m pip install -r requirements-dev.txt  
+- python -m build
+- python -m pytest test_schedule.py -v
+
+SOURCE_DIRECTORIES: schedule/
+BUILD_OUTPUT: dist/, schedule.egg-info/, .pytest_cache, *.pyc, __pycache__
+
+RULES:
+- ONLY edit files in SOURCE_DIRECTORIES — never edit build output directly
+- Build output is gitignored and must NOT be committed
+- Run the build command after making changes to verify they compile
+- ALWAYS write tests for your changes. If no test framework is set up, install one appropriate for the language (e.g. vitest/jest for JS/TS, pytest for Python, cargo test for Rust) and create the test file. Tests should verify the specific behavior your change introduces or fixes.
+- If you add a test framework or test script, update .github/workflows/ci.yml to run the tests (e.g. add a "yarn test" or "npm test" step after the build step)
+- Run tests and make sure they pass before finishing
+- If your fix changes how users install or use the library, update the README accordingly
+- Keep changes minimal and surgical — fix only what the issue asks for
+- ONLY commit files directly related to the fix — no debug scripts, temp files, or scratch code
+- Delete any files you created for debugging or testing purposes (e.g. debug-test.js, test-scratch.py) before finishing
+- Do NOT add or modify config files (vitest.config.ts, jest.config.js, tsconfig.json, .eslintrc) unless the issue specifically requires test infrastructure or config changes
+- Before finishing, run `git status` and remove any untracked files that are not part of the fix
+
+KNOWN_RISKS:
+- Single large file (945 lines) - be careful with major refactors
+- Timezone handling with pytz has DST edge cases - test thoroughly
+- No async support - don't add blocking operations in job execution path
+- The entire API surface is in __init__.py - changes affect public API
+
+QUIRKS:
+- Version is defined in setup.py (1.2.2) not pyproject.toml
+- Uses both pyproject.toml and setup.py for packaging
+- Test file is in root directory, not a tests/ folder
+- Development dependencies pinned to specific versions (e.g. black==20.8b1)
+- Excellent test coverage (81 tests) - maintain this standard
+- py.typed file indicates this package supports type checking

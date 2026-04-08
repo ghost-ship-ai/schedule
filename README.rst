@@ -1,6 +1,8 @@
 `schedule <https://schedule.readthedocs.io/>`__
 ===============================================
 
+**This is an actively maintained fork with automated CI/CD**
+
 
 .. image:: https://github.com/dbader/schedule/workflows/Tests/badge.svg
         :target: https://github.com/dbader/schedule/actions?query=workflow%3ATests+branch%3Amaster

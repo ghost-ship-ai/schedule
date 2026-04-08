@@ -1,0 +1,21 @@
+{
+  "language": "python",
+  "runtime": "python3.7+",
+  "package_manager": "pip",
+  "install_command": "python -m pip install -e .",
+  "install_dev_command": "python -m pip install -r requirements-dev.txt",
+  "build_command": "python -m build",
+  "test_command": "python -m pytest test_schedule.py -v",
+  "entry_points": ["schedule"],
+  "public_api_summary": "Job scheduling library with fluent API: schedule.every(N).unit.do(func). Supports seconds, minutes, hours, days, weeks with .at() times and timezone support.",
+  "description": "Python job scheduling for humans. An in-process scheduler for periodic jobs that uses a simple, human-friendly syntax.",
+  "license": "MIT",
+  "upstream": "dbader/schedule",
+  "risks": [
+    "Single-file module with 945 lines - large refactoring could be complex",
+    "Timezone handling uses pytz which has edge cases around DST transitions",
+    "No async support - blocking calls during job execution",
+    "In-process only - no distributed scheduling capabilities"
+  ],
+  "confidence": 95
+}
