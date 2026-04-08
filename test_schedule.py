@@ -619,6 +619,66 @@ class SchedulerTests(TestCase):
             assert next.hour == 7
             assert next.minute == 0
 
+    def test_tz_daily_midnight_no_immediate_execution(self):
+        """
+        Test for the midnight timezone bug: Jobs scheduled at midnight (00:00)
+        with timezone should not execute immediately on first run.
+
+        This test ensures that when scheduling a daily job at midnight with a timezone,
+        the job waits until the next occurrence of 00:00 in the specified timezone
+        before running, even if the current time is well past midnight.
+
+        Regression test for: https://github.com/dbader/schedule/issues/609
+        """
+        mock_job = self.make_tz_mock_job()
+
+        # Test scenario 1: Current time is 15:00 (3 PM), schedule for midnight
+        with mock_datetime(2024, 4, 8, 15, 0, 0):
+            # Current Berlin time: 15:00 (local) (during daylight saving)
+            # Schedule for midnight Berlin time
+            job = every().day.at("00:00", "Europe/Berlin").do(mock_job)
+
+            # The job should NOT run immediately
+            assert not job.should_run, "Job should not run immediately when scheduled after midnight"
+
+            # Next run should be tomorrow's midnight (in local time)
+            # Berlin midnight (00:00 CEST) = 22:00 local time (Berlin is UTC+2 during DST)
+            assert job.next_run.day == 8, f"Expected day 8, got {job.next_run.day}"
+            assert job.next_run.hour == 22, f"Expected hour 22, got {job.next_run.hour}"
+            assert job.next_run.minute == 0, f"Expected minute 0, got {job.next_run.minute}"
+
+            # Run pending should not execute the job
+            schedule.run_pending()
+            assert mock_job.call_count == 0, "Job should not have executed"
+
+        # Test scenario 2: Current time is just past midnight (00:30)
+        mock_job.reset_mock()
+        with mock_datetime(2024, 4, 8, 0, 30, 0):
+            # Current Berlin time: 00:30 (local)
+            # Schedule for midnight Berlin time
+            job = every().day.at("00:00", "Europe/Berlin").do(mock_job)
+
+            # The job should NOT run immediately (midnight has passed)
+            assert not job.should_run, "Job should not run immediately when scheduled 30 minutes after midnight"
+
+            # Run pending should not execute the job
+            schedule.run_pending()
+            assert mock_job.call_count == 0, "Job should not have executed"
+
+        # Test scenario 3: Edge case - exactly at midnight
+        mock_job.reset_mock()
+        with mock_datetime(2024, 4, 8, 0, 0, 0):
+            # Current Berlin time: exactly 00:00 (local)
+            # Schedule for midnight Berlin time
+            job = every().day.at("00:00", "Europe/Berlin").do(mock_job)
+
+            # The job should be scheduled for the next day, not run immediately
+            assert not job.should_run, "Job should not run immediately even when scheduled exactly at midnight"
+
+            # Run pending should not execute the job
+            schedule.run_pending()
+            assert mock_job.call_count == 0, "Job should not have executed"
+
     def test_tz_daily_half_hour_offset(self):
         mock_job = self.make_tz_mock_job()
         with mock_datetime(2022, 4, 8, 10, 0):
