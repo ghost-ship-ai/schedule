@@ -1964,3 +1964,29 @@ class AsyncSchedulerTests(TestCase):
         # Test with async function
         async_job = schedule.every(1).second.do(async_func)
         self.assertTrue(asyncio.iscoroutinefunction(async_job.job_func.func))
+
+    def test_sync_function_returning_coroutine(self):
+        """Test that sync functions accidentally returning coroutines are handled properly"""
+        async def test_edge_case():
+            result = []
+
+            async def inner_async():
+                await asyncio.sleep(0.01)
+                result.append("coroutine_executed")
+                return "coroutine_result"
+
+            def sync_func_returning_coroutine():
+                # This is a sync function that accidentally returns a coroutine
+                return inner_async()
+
+            # Schedule the sync function that returns a coroutine
+            job = schedule.every(1).second.do(sync_func_returning_coroutine)
+            job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+
+            # Run with async_run_pending - should handle the returned coroutine
+            await schedule.async_run_pending()
+
+            # Verify the coroutine was actually executed
+            self.assertEqual(result, ["coroutine_executed"])
+
+        asyncio.run(test_edge_case())

@@ -806,6 +806,9 @@ class Job:
             ret = await self.job_func()
         else:
             ret = self.job_func()
+            # Handle the case where a sync function accidentally returns a coroutine
+            if asyncio.iscoroutine(ret):
+                ret = await ret
 
         self.last_run = datetime.datetime.now()
         self._schedule_next_run()
