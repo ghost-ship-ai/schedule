@@ -777,9 +777,13 @@ class Job:
         Given a datetime, corrects any mistakes in the utc offset.
         This is similar to pytz' normalize, but adds the ability to attempt
         keeping the time-component at the same hour/minute/second.
+
+        During DST fall-back transitions, this method properly handles the fold
+        attribute to disambiguate times that occur twice.
         """
         if self.at_time_zone is None:
             return moment
+
         # Normalize corrects the utc-offset to match the timezone
         # For example: When a date&time&offset does not exist within a timezone,
         # the normalization will change the utc-offset to where it is valid.
@@ -814,6 +818,35 @@ class Job:
             # For example, if 02:23 does not exist (because DST moves from 02:00
             # to 03:00), this will schedule the job at 03:23.
             moment += offset_diff
+        else:
+            # Check if we're in an ambiguous time period (DST fall-back)
+            # where the same local time occurs twice
+            try:
+                # Try to create a naive datetime with the same time components
+                naive_moment = datetime.datetime(
+                    moment.year, moment.month, moment.day,
+                    moment.hour, moment.minute, moment.second, moment.microsecond
+                )
+
+                # Check if this time is ambiguous in the timezone
+                try:
+                    # This will raise AmbiguousTimeError if the time occurs twice
+                    self.at_time_zone.localize(naive_moment, is_dst=None)
+                except pytz.AmbiguousTimeError:
+                    # We're in an ambiguous time period (DST fall-back)
+                    # Use fold=1 to select the second (post-transition) occurrence
+                    # This ensures we advance past the DST transition properly
+                    moment_with_fold = naive_moment.replace(fold=1)
+
+                    # Localize with is_dst=False to get the second occurrence
+                    moment = self.at_time_zone.localize(moment_with_fold, is_dst=False)
+                except pytz.NonExistentTimeError:
+                    # Time doesn't exist (DST spring forward), keep the adjusted moment
+                    pass
+            except (AttributeError, TypeError):
+                # If there's any issue with fold handling, fall back to original behavior
+                pass
+
         return moment
 
     def _is_overdue(self, when: datetime.datetime):

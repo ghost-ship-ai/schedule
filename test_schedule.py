@@ -1249,6 +1249,50 @@ class SchedulerTests(TestCase):
         with mock_datetime(2022, 10, 30, 0, 0):
             assert every(4).hours.do(mock_job).next_run.hour == 4
 
+    def test_tz_daily_dst_fold_attribute_handling(self):
+        mock_job = self.make_tz_mock_job()
+        # Test that the _correct_utc_offset method properly handles the fold attribute
+        # during DST fall-back transitions (issue #648)
+
+        # Create a job that runs at 2:30 AM in Europe/Berlin
+        with mock_datetime(2023, 10, 29, 1, 0):
+            job = every().day.at("02:30", "Europe/Berlin").do(mock_job)
+
+            # Test _correct_utc_offset with ambiguous times
+            berlin_tz = pytz.timezone('Europe/Berlin')
+
+            # First occurrence of 2:30 AM (CEST, UTC+2)
+            first_occurrence = berlin_tz.localize(
+                datetime.datetime(2023, 10, 29, 2, 30), is_dst=True
+            )
+            corrected_first = job._correct_utc_offset(first_occurrence, fixate_time=True)
+            assert corrected_first.utcoffset() == datetime.timedelta(hours=2)
+
+            # Second occurrence of 2:30 AM (CET, UTC+1)
+            second_occurrence = berlin_tz.localize(
+                datetime.datetime(2023, 10, 29, 2, 30), is_dst=False
+            )
+            corrected_second = job._correct_utc_offset(second_occurrence, fixate_time=True)
+            assert corrected_second.utcoffset() == datetime.timedelta(hours=1)
+
+        # Test scheduling during the second occurrence (fold=1)
+        with mock_datetime(2023, 10, 29, 2, 30, fold=1):
+            job = every().day.at("02:30", "Europe/Berlin").do(mock_job)
+
+            # Job should be scheduled for the next day, not the current day
+            assert job.next_run.day == 30
+            assert job.next_run.hour == 2
+            assert job.next_run.minute == 30
+
+            # Job should not think it needs to run now during second occurrence
+            assert not job.should_run
+
+            # Test stability of scheduling across multiple recalculations
+            original_next_run = job.next_run
+            for _ in range(3):
+                job._schedule_next_run()
+                assert job.next_run == original_next_run
+
     def test_move_to_next_weekday_today(self):
         monday = datetime.datetime(2024, 5, 13, 10, 27, 54)
         tuesday = schedule._move_to_next_weekday(monday, "monday")
