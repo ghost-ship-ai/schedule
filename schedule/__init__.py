@@ -210,7 +210,9 @@ class Scheduler:
         return (self.next_run - datetime.datetime.now()).total_seconds()
 
 
-def _add_months_years(dt: datetime.datetime, months: int = 0, years: int = 0) -> datetime.datetime:
+def _add_months_years(
+    dt: datetime.datetime, months: int = 0, years: int = 0
+) -> datetime.datetime:
     """
     Add months and/or years to a datetime, handling edge cases like leap years
     and month-end dates properly.
@@ -545,7 +547,10 @@ class Job:
 
         :return: The invoked job instance
         """
-        if self.unit not in ("days", "hours", "minutes", "months", "years") and not self.start_day:
+        if (
+            self.unit not in ("days", "hours", "minutes", "months", "years")
+            and not self.start_day
+        ):
             raise ScheduleValueError(
                 "Invalid unit (valid units are `days`, `hours`, `minutes`, `months`, and `years`)"
             )
@@ -756,7 +761,15 @@ class Job:
         """
         Compute the instant when this job should run next.
         """
-        if self.unit not in ("seconds", "minutes", "hours", "days", "weeks", "months", "years"):
+        if self.unit not in (
+            "seconds",
+            "minutes",
+            "hours",
+            "days",
+            "weeks",
+            "months",
+            "years",
+        ):
             raise ScheduleValueError(
                 "Invalid unit (valid units are `seconds`, `minutes`, `hours`, "
                 "`days`, `weeks`, `months`, and `years`)"
@@ -827,7 +840,10 @@ class Job:
         if self.unit in ["days", "months", "years"] or self.start_day is not None:
             kwargs["hour"] = self.at_time.hour
 
-        if self.unit in ["days", "hours", "months", "years"] or self.start_day is not None:
+        if (
+            self.unit in ["days", "hours", "months", "years"]
+            or self.start_day is not None
+        ):
             kwargs["minute"] = self.at_time.minute
 
         moment = moment.replace(**kwargs)  # type: ignore
