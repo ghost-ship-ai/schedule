@@ -39,24 +39,50 @@ jobs:
           echo "$LOGS" > /tmp/ci_logs.txt
           echo "Collected CI failure logs"
 
-      - name: Post CI failure logs on PR
+      - name: Post CI failure as review on PR
         if: steps.guard.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
-          LOGS=$(cat /tmp/ci_logs.txt)
-          BODY="## CI Failed
+          LOGS=$(cat /tmp/ci_logs.txt | head -c 2500)
 
-          The CI workflow failed on this PR. Here are the relevant logs:
+          # Post as a REQUEST_CHANGES review so OpenHands resolver sees it
+          # (resolver reads reviews, not comments)
+          python3 << REVIEW
+          import json, os, subprocess
+
+          pr = int("${PR_NUMBER}")
+          repo = "${{ github.repository }}"
+          body = f"""CI Failed — please fix the following errors:
 
           \`\`\`
-          ${LOGS}
+          {open('/tmp/ci_logs.txt').read()[:2500]}
           \`\`\`
 
-          Ghost Ship AI will attempt to fix this automatically."
+          Fix these CI failures. Run the project's formatting/linting tools if that is what failed."""
 
-          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY" || echo "Warning: could not post comment"
+          # Use GitHub API to create a review
+          data = json.dumps({
+              "body": body,
+              "event": "REQUEST_CHANGES"
+          })
+
+          result = subprocess.run(
+              ["gh", "api", f"repos/{repo}/pulls/{pr}/reviews", "--method", "POST", "--input", "-"],
+              input=data, capture_output=True, text=True
+          )
+          if result.returncode == 0:
+              print(f"Posted CI failure review on PR #{pr}")
+          else:
+              print(f"Warning: could not post review: {result.stderr}")
+              # Fallback to comment
+              subprocess.run(
+                  ["gh", "pr", "comment", str(pr), "--repo", repo,
+                   "--body", f"## CI Failed\n\n\`\`\`\n{open('/tmp/ci_logs.txt').read()[:2500]}\n\`\`\`"],
+                  capture_output=True
+              )
+          REVIEW
           echo "Posted CI failure logs on PR #${PR_NUMBER}"
 
       - name: Dispatch fix to Ghost Ship
@@ -64,22 +90,20 @@ jobs:
         run: |
           set -e
           PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
-          FEEDBACK=$(cat /tmp/ci_logs.txt | head -c 2000)
 
+          # CI logs are already posted as a REQUEST_CHANGES review on the PR.
+          # OpenHands resolver reads reviews, so it will see the failure context.
           HTTP_CODE=$(curl -s -o /tmp/dispatch_response -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.DISPATCH_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ secrets.GHOST_SHIP_REPO }}/dispatches" \
-            -d "$(python3 -c "
-          import json, sys
-          print(json.dumps({
-              'event_type': 'address-review',
-              'client_payload': {
-                  'repo': '${{ github.repository }}',
-                  'pr_number': int('${PR_NUMBER}'),
-                  'feedback': sys.stdin.read()
+            -d "{
+              \"event_type\": \"address-review\",
+              \"client_payload\": {
+                \"repo\": \"${{ github.repository }}\",
+                \"pr_number\": ${PR_NUMBER}
               }
-          }))" <<< "$FEEDBACK")")
+            }")
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
             echo "Dispatch failed with HTTP ${HTTP_CODE}:"
             cat /tmp/dispatch_response
