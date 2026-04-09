@@ -42,7 +42,9 @@ class mock_datetime:
     Monkey-patch datetime for predictable results
     """
 
-    def __init__(self, year, month, day, hour, minute, second=0, zone=None, fold=0):
+    def __init__(
+        self, year, month, day, hour, minute, second=0, zone=None, fold=0
+    ):
         self.year = year
         self.month = month
         self.day = day
@@ -84,7 +86,12 @@ class mock_datetime:
             time.tzset()
 
         return MockDate(
-            self.year, self.month, self.day, self.hour, self.minute, self.second
+            self.year,
+            self.month,
+            self.day,
+            self.hour,
+            self.minute,
+            self.second,
         )
 
     def __exit__(self, *args, **kwargs):
@@ -127,63 +134,64 @@ class SchedulerTests(TestCase):
         with self.assertRaisesRegex(
             IntervalError,
             (
-                r"Scheduling \.monday\(\) jobs is only allowed for weekly jobs\. "
-                r"Using \.monday\(\) on a job scheduled to run every 2 or more "
-                r"weeks is not supported\."
+                r"Scheduling \.monday\(\) jobs is only allowed for weekly "
+                r"jobs\. Using \.monday\(\) on a job scheduled to run every "
+                r"2 or more weeks is not supported\."
             ),
         ):
             job_instance.monday
         with self.assertRaisesRegex(
             IntervalError,
             (
-                r"Scheduling \.tuesday\(\) jobs is only allowed for weekly jobs\. "
-                r"Using \.tuesday\(\) on a job scheduled to run every 2 or more "
-                r"weeks is not supported\."
+                r"Scheduling \.tuesday\(\) jobs is only allowed for weekly "
+                r"jobs\. Using \.tuesday\(\) on a job scheduled to run every "
+                r"2 or more weeks is not supported\."
             ),
         ):
             job_instance.tuesday
         with self.assertRaisesRegex(
             IntervalError,
             (
-                r"Scheduling \.wednesday\(\) jobs is only allowed for weekly jobs\. "
-                r"Using \.wednesday\(\) on a job scheduled to run every 2 or more "
-                r"weeks is not supported\."
+                r"Scheduling \.wednesday\(\) jobs is only allowed for weekly "
+                r"jobs\. Using \.wednesday\(\) on a job scheduled to run "
+                r"every "
+                r"2 or more weeks is not supported\."
             ),
         ):
             job_instance.wednesday
         with self.assertRaisesRegex(
             IntervalError,
             (
-                r"Scheduling \.thursday\(\) jobs is only allowed for weekly jobs\. "
-                r"Using \.thursday\(\) on a job scheduled to run every 2 or more "
-                r"weeks is not supported\."
+                r"Scheduling \.thursday\(\) jobs is only allowed for weekly "
+                r"jobs\. Using \.thursday\(\) on a job scheduled to run every "
+                r"2 or more weeks is not supported\."
             ),
         ):
             job_instance.thursday
         with self.assertRaisesRegex(
             IntervalError,
             (
-                r"Scheduling \.friday\(\) jobs is only allowed for weekly jobs\. "
-                r"Using \.friday\(\) on a job scheduled to run every 2 or more "
-                r"weeks is not supported\."
+                r"Scheduling \.friday\(\) jobs is only allowed for weekly "
+                r"jobs\. Using \.friday\(\) on a job scheduled to run every "
+                r"2 or more weeks is not supported\."
             ),
         ):
             job_instance.friday
         with self.assertRaisesRegex(
             IntervalError,
             (
-                r"Scheduling \.saturday\(\) jobs is only allowed for weekly jobs\. "
-                r"Using \.saturday\(\) on a job scheduled to run every 2 or more "
-                r"weeks is not supported\."
+                r"Scheduling \.saturday\(\) jobs is only allowed for weekly "
+                r"jobs\. Using \.saturday\(\) on a job scheduled to run every "
+                r"2 or more weeks is not supported\."
             ),
         ):
             job_instance.saturday
         with self.assertRaisesRegex(
             IntervalError,
             (
-                r"Scheduling \.sunday\(\) jobs is only allowed for weekly jobs\. "
-                r"Using \.sunday\(\) on a job scheduled to run every 2 or more "
-                r"weeks is not supported\."
+                r"Scheduling \.sunday\(\) jobs is only allowed for weekly "
+                r"jobs\. Using \.sunday\(\) on a job scheduled to run every "
+                r"2 or more weeks is not supported\."
             ),
         ):
             job_instance.sunday
@@ -230,7 +238,10 @@ class SchedulerTests(TestCase):
                 .tag("tag1", "tag3", "tag2")
             )
             assert schedule.next_run("tag1") == job1.next_run
-            assert schedule.default_scheduler.get_next_run("tag2") == job3.next_run
+            assert (
+                schedule.default_scheduler.get_next_run("tag2")
+                == job3.next_run
+            )
             assert schedule.next_run("tag3") == job3.next_run
             assert schedule.next_run("tag4") is None
 
@@ -317,24 +328,36 @@ class SchedulerTests(TestCase):
             assert every().day.until(datetime.datetime(3000, 1, 1, 20, 30)).do(
                 mock_job
             ).cancel_after == datetime.datetime(3000, 1, 1, 20, 30, 0)
-            assert every().day.until(datetime.datetime(3000, 1, 1, 20, 30, 50)).do(
-                mock_job
-            ).cancel_after == datetime.datetime(3000, 1, 1, 20, 30, 50)
+            assert every().day.until(
+                datetime.datetime(3000, 1, 1, 20, 30, 50)
+            ).do(mock_job).cancel_after == datetime.datetime(
+                3000, 1, 1, 20, 30, 50
+            )
             assert every().day.until(datetime.time(12, 30)).do(
                 mock_job
-            ).cancel_after == m.replace(hour=12, minute=30, second=0, microsecond=0)
+            ).cancel_after == m.replace(
+                hour=12, minute=30, second=0, microsecond=0
+            )
             assert every().day.until(datetime.time(12, 30, 50)).do(
                 mock_job
-            ).cancel_after == m.replace(hour=12, minute=30, second=50, microsecond=0)
+            ).cancel_after == m.replace(
+                hour=12, minute=30, second=50, microsecond=0
+            )
 
             assert every().day.until(
                 datetime.timedelta(days=40, hours=5, minutes=12, seconds=42)
-            ).do(mock_job).cancel_after == datetime.datetime(2020, 2, 10, 15, 12, 42)
+            ).do(mock_job).cancel_after == datetime.datetime(
+                2020, 2, 10, 15, 12, 42
+            )
 
-            assert every().day.until("10:30").do(mock_job).cancel_after == m.replace(
+            assert every().day.until("10:30").do(
+                mock_job
+            ).cancel_after == m.replace(
                 hour=10, minute=30, second=0, microsecond=0
             )
-            assert every().day.until("10:30:50").do(mock_job).cancel_after == m.replace(
+            assert every().day.until("10:30:50").do(
+                mock_job
+            ).cancel_after == m.replace(
                 hour=10, minute=30, second=50, microsecond=0
             )
             assert every().day.until("3000-01-01 10:30").do(
@@ -343,9 +366,11 @@ class SchedulerTests(TestCase):
             assert every().day.until("3000-01-01 10:30:50").do(
                 mock_job
             ).cancel_after == datetime.datetime(3000, 1, 1, 10, 30, 50)
-            assert every().day.until(datetime.datetime(3000, 1, 1, 10, 30, 50)).do(
-                mock_job
-            ).cancel_after == datetime.datetime(3000, 1, 1, 10, 30, 50)
+            assert every().day.until(
+                datetime.datetime(3000, 1, 1, 10, 30, 50)
+            ).do(mock_job).cancel_after == datetime.datetime(
+                3000, 1, 1, 10, 30, 50
+            )
 
         # Invalid argument types
         self.assertRaises(TypeError, every().day.until, 123)
@@ -359,7 +384,9 @@ class SchedulerTests(TestCase):
             datetime.datetime(2019, 12, 31, 23, 59),
         )
         self.assertRaises(
-            ScheduleValueError, every().day.until, datetime.timedelta(minutes=-1)
+            ScheduleValueError,
+            every().day.until,
+            datetime.timedelta(minutes=-1),
         )
         one_hour_ago = datetime.datetime.now() - datetime.timedelta(hours=1)
         self.assertRaises(ScheduleValueError, every().day.until, one_hour_ago)
@@ -480,7 +507,10 @@ class SchedulerTests(TestCase):
             assert every().saturday.do(mock_job).next_run.day == 9
             assert every().sunday.do(mock_job).next_run.day == 10
             assert (
-                every().minute.until(datetime.time(12, 17)).do(mock_job).next_run.minute
+                every()
+                .minute.until(datetime.time(12, 17))
+                .do(mock_job)
+                .next_run.minute
                 == 16
             )
 
@@ -603,7 +633,9 @@ class SchedulerTests(TestCase):
             # Current India time: feb-2 03:45
             # Expected to run India time: feb-2 06:30
             # Next run Berlin time: feb-2 02:00
-            next = every().day.at("06:30", "Asia/Kolkata").do(mock_job).next_run
+            next = (
+                every().day.at("06:30", "Asia/Kolkata").do(mock_job).next_run
+            )
             assert next.day == 2
             assert next.hour == 2
             assert next.minute == 0
@@ -611,7 +643,7 @@ class SchedulerTests(TestCase):
     def test_tz_daily_midnight(self):
         mock_job = self.make_tz_mock_job()
         with mock_datetime(2023, 4, 14, 4, 50):
-            # Current Berlin time: april-14 04:50 (local) (during daylight saving)
+            # Current Berlin time: april-14 04:50 (local) (during DST)
             # Current US/Central time: april-13 21:50
             # Expected to run US/Central time: april-14 00:00
             # Next run Berlin time: april-14 07:00
@@ -627,7 +659,12 @@ class SchedulerTests(TestCase):
             # Current NY time: 04:00
             # Expected to run NY time: 10:30
             # Next run Berlin time: 16:30
-            next = every().day.at("10:30", "America/New_York").do(mock_job).next_run
+            next = (
+                every()
+                .day.at("10:30", "America/New_York")
+                .do(mock_job)
+                .next_run
+            )
             assert next.hour == 16
             assert next.minute == 30
 
@@ -677,7 +714,8 @@ class SchedulerTests(TestCase):
             assert job.next_run.hour == 2
             assert job.next_run.minute == 30
         with mock_datetime(2023, 10, 29, 2, 35):
-            # After the job runs, the next run should be scheduled on the next day at 02:30
+            # After the job runs, the next run should be scheduled on the
+            # next day at 02:30
             job.run()
             assert job.next_run.day == 30
             assert job.next_run.hour == 2
@@ -741,7 +779,12 @@ class SchedulerTests(TestCase):
             # Expected run Amsterdam: oktober-20 00:00:20 (daylight saving active)
             # Next run UTC time: oktober-19 22:00:20
             schedule.clear()
-            next = every().day.at("00:00:20", "Europe/Amsterdam").do(mock_job).next_run
+            next = (
+                every()
+                .day.at("00:00:20", "Europe/Amsterdam")
+                .do(mock_job)
+                .next_run
+            )
             assert next.day == 19
             assert next.hour == 22
             assert next.minute == 00
@@ -755,7 +798,12 @@ class SchedulerTests(TestCase):
             # Expected run Amsterdam: sunday 29 oktober 23:00 (daylight saving NOT active)
             # Next run UTC time: oktober-29 22:00
             schedule.clear()
-            next = every().sunday.at("23:00", "Europe/Amsterdam").do(mock_job).next_run
+            next = (
+                every()
+                .sunday.at("23:00", "Europe/Amsterdam")
+                .do(mock_job)
+                .next_run
+            )
             assert next.day == 29
             assert next.hour == 22
             assert next.minute == 00
@@ -767,7 +815,12 @@ class SchedulerTests(TestCase):
             # Current Sydney time: jan-1 09:00 (next day)
             # Expected to run Sydney time: jan-1 12:00
             # Next run Berlin time: jan-1 02:00
-            next = every().day.at("12:00", "Australia/Sydney").do(mock_job).next_run
+            next = (
+                every()
+                .day.at("12:00", "Australia/Sydney")
+                .do(mock_job)
+                .next_run
+            )
             assert next.day == 1
             assert next.hour == 2
             assert next.minute == 0
@@ -793,7 +846,12 @@ class SchedulerTests(TestCase):
             # Current Sydney time: mar-1 09:50 (next day)
             # Expected to run Sydney time: mar-1 10:00
             # Next run Berlin time: mar-1 00:00
-            next = every().day.at("10:00", "Australia/Sydney").do(mock_job).next_run
+            next = (
+                every()
+                .day.at("10:00", "Australia/Sydney")
+                .do(mock_job)
+                .next_run
+            )
             assert next.day == 1
             assert next.hour == 0
             assert next.minute == 0
@@ -822,7 +880,9 @@ class SchedulerTests(TestCase):
             # We expect the job to run at 23:00 on Sunday 17 September NZST
             # That is an expected idle time of 1 hour
             # Expected next run in NZST: 2023-09-18 11:00:00
-            next = schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            next = (
+                schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            )
             assert round(schedule.idle_seconds() / 3600) == 1
             assert next.day == 18
             assert next.hour == 11
@@ -838,7 +898,9 @@ class SchedulerTests(TestCase):
             # Current London time:  26 March 00:30 (UTC+0)
             # Expected London time: 26 March 02:00 (UTC+1)
             # Expected Berlin time: 26 March 03:00 (UTC+2)
-            next = every().day.at("01:00", "Europe/London").do(mock_job).next_run
+            next = (
+                every().day.at("01:00", "Europe/London").do(mock_job).next_run
+            )
             assert next.day == 26
             assert next.hour == 3
             assert next.minute == 0
@@ -851,7 +913,12 @@ class SchedulerTests(TestCase):
             # Current Istanbul time: oct-29 04:30
             # Expected to run Istanbul time: oct-29 06:00
             # Next run Berlin time: oct-29 04:00
-            next = every().day.at("06:00", "Europe/Istanbul").do(mock_job).next_run
+            next = (
+                every()
+                .day.at("06:00", "Europe/Istanbul")
+                .do(mock_job)
+                .next_run
+            )
             assert next.hour == 4
             assert next.minute == 0
 
@@ -864,7 +931,9 @@ class SchedulerTests(TestCase):
             # Current time UTC: Sunday 17 September 22:00
             # Expected next run in NZST: 2023-09-18 11:00:00
             schedule.clear()
-            next = schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            next = (
+                schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            )
             assert next.day == 18
             assert next.hour == 11
             assert next.minute == 0
@@ -878,7 +947,9 @@ class SchedulerTests(TestCase):
             # Current time UTC: Sunday 7 April 22:00
             # Expected next run in NZDT: 2023-04-08 11:00:00
             schedule.clear()
-            next = schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            next = (
+                schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            )
             assert next.day == 8
             assert next.hour == 11
             assert next.minute == 0
@@ -893,7 +964,9 @@ class SchedulerTests(TestCase):
             # Expected next run in UTC:  2023-09-24 23:00
             # Expected next run in NZDT: 2023-09-25 12:00
             schedule.clear()
-            next = schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            next = (
+                schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            )
             assert next.month == 9
             assert next.day == 25
             assert next.hour == 12
@@ -909,7 +982,9 @@ class SchedulerTests(TestCase):
             # Expected next run in UTC:  2023-03-31 23:00
             # Expected next run in NZDT: 2024-04-01 12:00
             schedule.clear()
-            next = schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            next = (
+                schedule.every().day.at("23:00", "UTC").do(mock_job).next_run
+            )
             assert next.month == 4
             assert next.day == 1
             assert next.hour == 12
@@ -942,7 +1017,11 @@ class SchedulerTests(TestCase):
         # Local timezone: Newfoundland, Canada: UTC-2:30 / DST UTC-3:30
         # Remote timezone: Chatham Islands, New Zealand: UTC+12:45 / DST UTC+13:45
         schedule.clear()
-        job = schedule.every(20).minutes.at(":13", "Canada/Newfoundland").do(mock_job)
+        job = (
+            schedule.every(20)
+            .minutes.at(":13", "Canada/Newfoundland")
+            .do(mock_job)
+        )
         with mock_datetime(2024, 9, 29, 2, 20, 0, TZ_CHATHAM):
             # First run, nothing special, no utc-offset change
             # Current time: 29 sept, 02:20:00  Chatham
@@ -977,7 +1056,9 @@ class SchedulerTests(TestCase):
             # Expected time: 3 Nov, 02:43:13 Chatham
             assert job.next_run.day == 3
             assert job.next_run.hour == 2
-            assert job.next_run.minute == 43  # Within the fold, first occurrence
+            assert (
+                job.next_run.minute == 43
+            )  # Within the fold, first occurrence
             assert job.next_run.second == 13
         with mock_datetime(2024, 11, 3, 2, 23, 55, TZ_CHATHAM, fold=1):
             # Time is during the fold. Local time has moved back 1 hour, this is
@@ -1117,7 +1198,10 @@ class SchedulerTests(TestCase):
             # Expected time Berlin Extra: 31 Mar, 11:00 (UTC+03:00)
             schedule.clear()
             next = (
-                schedule.every().day.at("10:00", "Europe/Berlin").do(mock_job).next_run
+                schedule.every()
+                .day.at("10:00", "Europe/Berlin")
+                .do(mock_job)
+                .next_run
             )
             assert next.day == 31
             assert next.hour == 11
@@ -1138,7 +1222,10 @@ class SchedulerTests(TestCase):
             # Expected time Berlin Inverted: 31 Mar, 09:00 (UTC+01:00)
             schedule.clear()
             next = (
-                schedule.every().day.at("10:00", "Europe/Berlin").do(mock_job).next_run
+                schedule.every()
+                .day.at("10:00", "Europe/Berlin")
+                .do(mock_job)
+                .next_run
             )
             assert next.day == 31
             assert next.hour == 9
@@ -1196,13 +1283,17 @@ class SchedulerTests(TestCase):
         overlap_time = tz.localize(datetime.datetime(2024, 10, 27, 2, 30))
         aligned_time = job._correct_utc_offset(overlap_time, fixate_time=False)
         # Since the time exists twice, no fixate_time flag should yield the first occurrence
-        first_occurrence = tz.localize(datetime.datetime(2024, 10, 27, 2, 30, fold=0))
+        first_occurrence = tz.localize(
+            datetime.datetime(2024, 10, 27, 2, 30, fold=0)
+        )
         self.assertEqual(first_occurrence, aligned_time)
 
     def test_align_utc_offset_with_dst_fold_fixate_1(self):
         (job, tz) = self.setup_utc_offset_test()
         # This time exists twice, this is the 1st occurance
-        overlap_time = tz.localize(datetime.datetime(2024, 10, 27, 1, 30), is_dst=True)
+        overlap_time = tz.localize(
+            datetime.datetime(2024, 10, 27, 1, 30), is_dst=True
+        )
         overlap_time += datetime.timedelta(
             hours=1
         )  # puts it at 02:30+02:00 (Which exists once)
@@ -1217,7 +1308,9 @@ class SchedulerTests(TestCase):
     def test_align_utc_offset_with_dst_fold_fixate_2(self):
         (job, tz) = self.setup_utc_offset_test()
         # 02:30 exists twice, this is the 2nd occurance
-        overlap_time = tz.localize(datetime.datetime(2024, 10, 27, 2, 30), is_dst=False)
+        overlap_time = tz.localize(
+            datetime.datetime(2024, 10, 27, 2, 30), is_dst=False
+        )
         # The time 2024-10-27 02:30:00+01:00 exists once
 
         aligned_time = job._correct_utc_offset(overlap_time, fixate_time=True)
@@ -1233,7 +1326,9 @@ class SchedulerTests(TestCase):
         duplicate_time = tz.localize(datetime.datetime(2024, 10, 27, 2, 30))
         duplicate_time += datetime.timedelta(hours=1)
 
-        aligned_time = job._correct_utc_offset(duplicate_time, fixate_time=False)
+        aligned_time = job._correct_utc_offset(
+            duplicate_time, fixate_time=False
+        )
 
         assert aligned_time.utcoffset() == datetime.timedelta(hours=1)
         assert aligned_time.hour == 3
@@ -1359,11 +1454,17 @@ class SchedulerTests(TestCase):
 
         # Ensure Job.__repr__ does not throw exception on a partially-composed Job
         s3 = repr(schedule.every(10))
-        assert s3 == "Every 10 None do [None] (last run: [never], next run: [never])"
+        assert (
+            s3
+            == "Every 10 None do [None] (last run: [never], next run: [never])"
+        )
 
         # Test the specific bug case: interval=1 with unit=None should not crash
         s4 = repr(schedule.every(1))
-        assert s4 == "Every 1 None do [None] (last run: [never], next run: [never])"
+        assert (
+            s4
+            == "Every 1 None do [None] (last run: [never], next run: [never])"
+        )
 
     def test_repr_with_none_unit_bug_fix(self):
         """Test for bug fix: TypeError in Job.__repr__ when unit is None"""
@@ -1776,7 +1877,9 @@ class SchedulerTests(TestCase):
                 job
             )  # Job already cancelled, should trigger ValueError path
             # Verify that logger.debug was called with the job object directly
-            mock_debug.assert_called_with('Cancelling not-scheduled job "%s"', job)
+            mock_debug.assert_called_with(
+                'Cancelling not-scheduled job "%s"', job
+            )
 
         # Test that job.__str__ method is working correctly
         job_str = str(job)
@@ -1802,14 +1905,18 @@ class ThreadSafetyTests(TestCase):
             nonlocal execution_count
             with execution_lock:
                 execution_count += 1
-                time.sleep(0.01)  # Small delay to increase chance of race condition
+                time.sleep(
+                    0.01
+                )  # Small delay to increase chance of race condition
 
         # Schedule a job that should run immediately
         schedule.every(1).seconds.do(test_job)
 
         # Force the job to be ready to run
         for job in schedule.jobs:
-            job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+            job.next_run = datetime.datetime.now() - datetime.timedelta(
+                seconds=1
+            )
 
         def run_pending_worker():
             schedule.run_pending()
@@ -1830,7 +1937,9 @@ class ThreadSafetyTests(TestCase):
 
         # The job should have been executed exactly once, not multiple times
         self.assertEqual(
-            execution_count, 1, "Job was executed multiple times due to race condition"
+            execution_count,
+            1,
+            "Job was executed multiple times due to race condition",
         )
 
     def test_concurrent_job_scheduling_and_execution(self):
@@ -1844,7 +1953,9 @@ class ThreadSafetyTests(TestCase):
         def make_test_job(job_id):
             def test_job():
                 with execution_lock:
-                    execution_counts[job_id] = execution_counts.get(job_id, 0) + 1
+                    execution_counts[job_id] = (
+                        execution_counts.get(job_id, 0) + 1
+                    )
 
             return test_job
 
@@ -1917,13 +2028,19 @@ class ThreadSafetyTests(TestCase):
                     schedule.run_pending()
                 except RuntimeError as e:
                     if "list modified during iteration" in str(e):
-                        self.fail("List modification error during concurrent access")
+                        self.fail(
+                            "List modification error during concurrent access"
+                        )
                 time.sleep(0.001)
 
         # Split jobs between threads for cancellation
         mid = len(jobs) // 2
-        cancel_thread1 = threading.Thread(target=cancel_jobs, args=(jobs[:mid],))
-        cancel_thread2 = threading.Thread(target=cancel_jobs, args=(jobs[mid:],))
+        cancel_thread1 = threading.Thread(
+            target=cancel_jobs, args=(jobs[:mid],)
+        )
+        cancel_thread2 = threading.Thread(
+            target=cancel_jobs, args=(jobs[mid:],)
+        )
         run_thread = threading.Thread(target=run_scheduler)
 
         # Start all threads
@@ -2027,7 +2144,9 @@ class ThreadSafetyTests(TestCase):
 
             # Force job to be ready
             for job in scheduler.jobs:
-                job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+                job.next_run = datetime.datetime.now() - datetime.timedelta(
+                    seconds=1
+                )
 
             # Run the job
             scheduler.run_pending()
@@ -2146,7 +2265,9 @@ class AsyncSchedulerTests(TestCase):
     def test_async_job_arguments(self):
         """Test async jobs with arguments and return values."""
         # Schedule async job with arguments
-        job = schedule.every(1).seconds.do(self.async_job_with_args, "test", count=3)
+        job = schedule.every(1).seconds.do(
+            self.async_job_with_args, "test", count=3
+        )
         self.assertTrue(job.is_async)
 
         # Force job to be ready
@@ -2171,8 +2292,12 @@ class AsyncSchedulerTests(TestCase):
         self.assertFalse(sync_job.is_async)
 
         # Force both jobs to be ready
-        async_job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
-        sync_job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+        async_job.next_run = datetime.datetime.now() - datetime.timedelta(
+            seconds=1
+        )
+        sync_job.next_run = datetime.datetime.now() - datetime.timedelta(
+            seconds=1
+        )
 
         async def run_test():
             await schedule.async_run_pending()
@@ -2192,7 +2317,9 @@ class AsyncSchedulerTests(TestCase):
 
         # Force all jobs to be ready
         for job in schedule.jobs:
-            job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+            job.next_run = datetime.datetime.now() - datetime.timedelta(
+                seconds=1
+            )
 
         async def run_test():
             await schedule.async_run_pending()
@@ -2346,7 +2473,9 @@ class AsyncSchedulerTests(TestCase):
             schedule.every(1).seconds.do(self.sync_job)
 
         for job in schedule.jobs:
-            job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+            job.next_run = datetime.datetime.now() - datetime.timedelta(
+                seconds=1
+            )
 
         schedule.run_pending()
         sync_end = time.time()
@@ -2361,7 +2490,9 @@ class AsyncSchedulerTests(TestCase):
                 schedule.every(1).seconds.do(fast_async_job)
 
             for job in schedule.jobs:
-                job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+                job.next_run = datetime.datetime.now() - datetime.timedelta(
+                    seconds=1
+                )
 
             await schedule.async_run_pending()
             async_end = time.time()
@@ -2398,7 +2529,9 @@ class AsyncSchedulerTests(TestCase):
 
         # Force all jobs to be ready
         for job in schedule.jobs:
-            job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+            job.next_run = datetime.datetime.now() - datetime.timedelta(
+                seconds=1
+            )
 
         async def run_test():
             await schedule.async_run_pending()
