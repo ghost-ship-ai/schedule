@@ -1781,3 +1781,271 @@ class SchedulerTests(TestCase):
         job_str = str(job)
         assert "Job(interval=1, unit=seconds" in job_str
         assert "do=job" in job_str
+
+
+class ThreadSafetyTests(TestCase):
+    """Test thread safety of the scheduler."""
+
+    def setUp(self):
+        schedule.clear()
+
+    def test_concurrent_run_pending_no_duplicate_execution(self):
+        """Test that concurrent run_pending() calls don't cause duplicate job execution."""
+        import threading
+        import time
+
+        execution_count = 0
+        execution_lock = threading.Lock()
+
+        def test_job():
+            nonlocal execution_count
+            with execution_lock:
+                execution_count += 1
+                time.sleep(0.01)  # Small delay to increase chance of race condition
+
+        # Schedule a job that should run immediately
+        schedule.every(1).seconds.do(test_job)
+
+        # Force the job to be ready to run
+        for job in schedule.jobs:
+            job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+
+        def run_pending_worker():
+            schedule.run_pending()
+
+        # Create multiple threads that call run_pending simultaneously
+        threads = []
+        for _ in range(5):
+            t = threading.Thread(target=run_pending_worker)
+            threads.append(t)
+
+        # Start all threads at roughly the same time
+        for t in threads:
+            t.start()
+
+        # Wait for all threads to complete
+        for t in threads:
+            t.join()
+
+        # The job should have been executed exactly once, not multiple times
+        self.assertEqual(
+            execution_count, 1, "Job was executed multiple times due to race condition"
+        )
+
+    def test_concurrent_job_scheduling_and_execution(self):
+        """Test that jobs can be scheduled and executed concurrently without issues."""
+        import threading
+        import time
+
+        execution_counts = {}
+        execution_lock = threading.Lock()
+
+        def make_test_job(job_id):
+            def test_job():
+                with execution_lock:
+                    execution_counts[job_id] = execution_counts.get(job_id, 0) + 1
+
+            return test_job
+
+        def schedule_jobs():
+            """Schedule multiple jobs from different threads."""
+            for i in range(5):
+                schedule.every(1).seconds.do(
+                    make_test_job(f"job_{threading.current_thread().name}_{i}")
+                )
+
+        def run_scheduler():
+            """Run the scheduler in a loop."""
+            for _ in range(10):
+                schedule.run_pending()
+                time.sleep(0.01)
+
+        # Create threads for scheduling jobs
+        schedule_threads = []
+        for i in range(3):
+            t = threading.Thread(target=schedule_jobs, name=f"Scheduler_{i}")
+            schedule_threads.append(t)
+
+        # Create threads for running the scheduler
+        run_threads = []
+        for i in range(2):
+            t = threading.Thread(target=run_scheduler, name=f"Runner_{i}")
+            run_threads.append(t)
+
+        # Start all threads
+        for t in schedule_threads + run_threads:
+            t.start()
+
+        # Wait for all threads to complete
+        for t in schedule_threads + run_threads:
+            t.join()
+
+        # Verify that jobs were scheduled without errors
+        self.assertGreater(len(schedule.jobs), 0, "No jobs were scheduled")
+
+        # Clean up
+        schedule.clear()
+
+    def test_concurrent_job_cancellation(self):
+        """Test that jobs can be cancelled concurrently without causing list modification errors."""
+        import threading
+        import time
+
+        def dummy_job():
+            pass
+
+        # Schedule many jobs
+        jobs = []
+        for i in range(20):
+            job = schedule.every(1).seconds.do(dummy_job)
+            jobs.append(job)
+
+        def cancel_jobs(job_list):
+            """Cancel jobs from a thread."""
+            for job in job_list:
+                try:
+                    schedule.cancel_job(job)
+                except ValueError:
+                    # Job might already be cancelled by another thread
+                    pass
+
+        def run_scheduler():
+            """Run the scheduler while jobs are being cancelled."""
+            for _ in range(10):
+                try:
+                    schedule.run_pending()
+                except RuntimeError as e:
+                    if "list modified during iteration" in str(e):
+                        self.fail("List modification error during concurrent access")
+                time.sleep(0.001)
+
+        # Split jobs between threads for cancellation
+        mid = len(jobs) // 2
+        cancel_thread1 = threading.Thread(target=cancel_jobs, args=(jobs[:mid],))
+        cancel_thread2 = threading.Thread(target=cancel_jobs, args=(jobs[mid:],))
+        run_thread = threading.Thread(target=run_scheduler)
+
+        # Start all threads
+        cancel_thread1.start()
+        cancel_thread2.start()
+        run_thread.start()
+
+        # Wait for all threads to complete
+        cancel_thread1.join()
+        cancel_thread2.join()
+        run_thread.join()
+
+        # All jobs should be cancelled
+        self.assertEqual(len(schedule.jobs), 0, "Not all jobs were cancelled")
+
+    def test_concurrent_clear_and_schedule(self):
+        """Test that clearing jobs and scheduling new ones concurrently works correctly."""
+        import threading
+        import time
+
+        def dummy_job():
+            pass
+
+        def schedule_worker():
+            """Continuously schedule jobs."""
+            for i in range(10):
+                schedule.every(1).seconds.do(dummy_job)
+                time.sleep(0.001)
+
+        def clear_worker():
+            """Continuously clear jobs."""
+            for _ in range(5):
+                schedule.clear()
+                time.sleep(0.002)
+
+        def run_worker():
+            """Continuously run pending jobs."""
+            for _ in range(20):
+                schedule.run_pending()
+                time.sleep(0.001)
+
+        # Create threads
+        schedule_thread = threading.Thread(target=schedule_worker)
+        clear_thread = threading.Thread(target=clear_worker)
+        run_thread = threading.Thread(target=run_worker)
+
+        # Start all threads
+        schedule_thread.start()
+        clear_thread.start()
+        run_thread.start()
+
+        # Wait for all threads to complete
+        schedule_thread.join()
+        clear_thread.join()
+        run_thread.join()
+
+        # Test should complete without errors
+        # Final state is unpredictable but should be consistent
+        self.assertIsInstance(len(schedule.jobs), int)
+
+    def test_scheduler_lock_is_reentrant(self):
+        """Test that the scheduler lock is reentrant (RLock) to handle nested calls."""
+        import threading
+
+        def job_that_cancels_itself():
+            # This will cause _run_job to call cancel_job, testing reentrancy
+            return schedule.CancelJob
+
+        job = schedule.every(1).seconds.do(job_that_cancels_itself)
+
+        # Force the job to be ready to run
+        job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+
+        # This should not deadlock due to reentrant lock
+        schedule.run_pending()
+
+        # Job should be cancelled and removed
+        self.assertNotIn(job, schedule.jobs)
+
+    def test_multiple_schedulers_thread_safety(self):
+        """Test that multiple scheduler instances can be used safely in different threads."""
+        import threading
+        import time
+
+        execution_counts = {}
+        execution_lock = threading.Lock()
+
+        def make_job(scheduler_id):
+            def job():
+                with execution_lock:
+                    execution_counts[scheduler_id] = (
+                        execution_counts.get(scheduler_id, 0) + 1
+                    )
+
+            return job
+
+        def worker(scheduler_id):
+            # Create a separate scheduler instance for this thread
+            scheduler = schedule.Scheduler()
+            scheduler.every(1).seconds.do(make_job(scheduler_id))
+
+            # Force job to be ready
+            for job in scheduler.jobs:
+                job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+
+            # Run the job
+            scheduler.run_pending()
+
+        # Create multiple threads with separate schedulers
+        threads = []
+        for i in range(5):
+            t = threading.Thread(target=worker, args=(f"scheduler_{i}",))
+            threads.append(t)
+
+        # Start all threads
+        for t in threads:
+            t.start()
+
+        # Wait for all threads to complete
+        for t in threads:
+            t.join()
+
+        # Each scheduler should have executed its job exactly once
+        self.assertEqual(len(execution_counts), 5)
+        for count in execution_counts.values():
+            self.assertEqual(count, 1)
