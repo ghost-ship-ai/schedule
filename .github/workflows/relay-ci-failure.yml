@@ -34,7 +34,7 @@ jobs:
           GH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
         run: |
           RUN_ID="${{ github.event.workflow_run.id }}"
-          LOGS=$(gh run view "$RUN_ID" --log-failed 2>&1 | tail -100 | head -c 3000 || echo "Could not fetch logs")
+          LOGS=$(gh run view "$RUN_ID" --repo "${{ github.repository }}" --log-failed 2>&1 | tail -100 | head -c 3000 || echo "Could not fetch logs")
           # Save logs to file to avoid shell escaping issues
           echo "$LOGS" > /tmp/ci_logs.txt
           echo "Collected CI failure logs"
