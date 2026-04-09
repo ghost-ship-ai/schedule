@@ -830,6 +830,21 @@ class Job:
             while next_run <= now:
                 next_run += period
 
+            # Special handling for DST fall-back transitions
+            # If we're in an ambiguous time period and the next run is also ambiguous,
+            # ensure we don't get stuck by advancing properly
+            if (self.at_time is not None and
+                self._is_ambiguous_time(now.replace(tzinfo=None)) and
+                self._is_ambiguous_time(next_run.replace(tzinfo=None))):
+
+                # If both current time and next run are in the same ambiguous period,
+                # we need to advance to the next occurrence to avoid getting stuck
+                if (next_run.date() == now.date() and
+                    next_run.hour == now.hour and
+                    next_run.minute == now.minute):
+                    # We're stuck in the same ambiguous time, advance by one period
+                    next_run += period
+
         next_run = self._correct_utc_offset(
             next_run, fixate_time=(self.at_time is not None)
         )
@@ -877,9 +892,45 @@ class Job:
         Given a datetime, corrects any mistakes in the utc offset.
         This is similar to pytz' normalize, but adds the ability to attempt
         keeping the time-component at the same hour/minute/second.
+
+        Enhanced to properly handle DST fall-back transitions where times
+        occur twice (ambiguous times).
         """
         if self.at_time_zone is None:
             return moment
+
+        # Check if we're dealing with an ambiguous time (DST fall-back)
+        if fixate_time and self._is_ambiguous_time(moment):
+            naive_moment = moment.replace(tzinfo=None)
+
+            # Get current time to determine context
+            now = datetime.datetime.now(self.at_time_zone)
+            now_naive = now.replace(tzinfo=None)
+
+            # If we're scheduling a future occurrence of an ambiguous time,
+            # we want to use the second occurrence (post-transition) to ensure
+            # we don't get stuck in the transition period
+            if self._is_ambiguous_time(now_naive):
+                # We're currently in the ambiguous period
+                # For future scheduling, use the second occurrence (is_dst=False)
+                try:
+                    moment_with_fold = self.at_time_zone.localize(naive_moment, is_dst=False)
+                    return moment_with_fold
+                except:
+                    # If localization fails, fall back to original logic
+                    pass
+            else:
+                # We're not in the ambiguous period, but the target time is ambiguous
+                # This means we're scheduling for a future DST fall-back
+                # Use the first occurrence (is_dst=True) for the initial scheduling
+                try:
+                    moment_with_fold = self.at_time_zone.localize(naive_moment, is_dst=True)
+                    return moment_with_fold
+                except:
+                    # If localization fails, fall back to original logic
+                    pass
+
+        # Original logic for non-ambiguous times and DST gaps
         # Normalize corrects the utc-offset to match the timezone
         # For example: When a date&time&offset does not exist within a timezone,
         # the normalization will change the utc-offset to where it is valid.
@@ -915,6 +966,31 @@ class Job:
             # to 03:00), this will schedule the job at 03:23.
             moment += offset_diff
         return moment
+
+    def _is_ambiguous_time(self, dt: datetime.datetime) -> bool:
+        """
+        Check if a datetime falls within an ambiguous period (DST fall-back).
+
+        During DST fall-back transitions, some local times occur twice.
+        This method detects if a given datetime is in such an ambiguous period.
+        """
+        if self.at_time_zone is None:
+            return False
+
+        try:
+            # Try to localize the naive datetime with both fold values
+            naive_dt = dt.replace(tzinfo=None)
+
+            # If both fold=0 and fold=1 produce different UTC times,
+            # then this is an ambiguous time
+            dt_fold0 = self.at_time_zone.localize(naive_dt, is_dst=True)
+            dt_fold1 = self.at_time_zone.localize(naive_dt, is_dst=False)
+
+            # If the UTC times are different, this is an ambiguous time
+            return dt_fold0.utctimetuple() != dt_fold1.utctimetuple()
+        except:
+            # If localization fails, it's not ambiguous
+            return False
 
     def _is_overdue(self, when: datetime.datetime):
         return self.cancel_after is not None and when > self.cancel_after
