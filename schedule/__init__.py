@@ -42,6 +42,7 @@ Usage:
 """
 
 from collections.abc import Hashable
+import asyncio
 import calendar
 import datetime
 import functools
@@ -106,6 +107,24 @@ class Scheduler:
             runnable_jobs = (job for job in self.jobs if job.should_run)
             for job in sorted(runnable_jobs):
                 self._run_job(job)
+
+    async def async_run_pending(self) -> None:
+        """
+        Run all jobs that are scheduled to run, with support for async coroutines.
+
+        This method can handle both sync and async jobs. Sync jobs are executed
+        normally, while async jobs (coroutines) are awaited.
+
+        Please note that it is *intended behavior that async_run_pending()
+        does not run missed jobs*. For example, if you've registered a job
+        that should run every minute and you only call async_run_pending()
+        in one hour increments then your job won't be run 60 times in
+        between but only once.
+        """
+        with self._lock:
+            runnable_jobs = (job for job in self.jobs if job.should_run)
+            for job in sorted(runnable_jobs):
+                await self._async_run_job(job)
 
     def run_all(self, delay_seconds: int = 0) -> None:
         """
@@ -182,6 +201,15 @@ class Scheduler:
 
     def _run_job(self, job: "Job") -> None:
         ret = job.run()
+        if isinstance(ret, CancelJob) or ret is CancelJob:
+            self.cancel_job(job)
+
+    async def _async_run_job(self, job: "Job") -> None:
+        ret = job.run()
+        # If the result is a coroutine, await it
+        if asyncio.iscoroutine(ret):
+            ret = await ret
+        # Handle CancelJob return values from both sync and async jobs
         if isinstance(ret, CancelJob) or ret is CancelJob:
             self.cancel_job(job)
 
@@ -756,7 +784,8 @@ class Job:
         case CancelJob takes priority over any other returned value.
 
         :return: The return value returned by the `job_func`, or CancelJob if the job's
-                 deadline is reached.
+                 deadline is reached. For async coroutine functions, returns the
+                 coroutine object without awaiting it.
 
         """
         if self._is_overdue(datetime.datetime.now()):
@@ -764,7 +793,15 @@ class Job:
             return CancelJob
 
         logger.debug("Running job %s", self)
-        ret = self.job_func()
+
+        # Check if the job function is a coroutine function
+        if asyncio.iscoroutinefunction(self.job_func.func if hasattr(self.job_func, 'func') else self.job_func):
+            # For coroutine functions, call but don't await - return the coroutine
+            ret = self.job_func()
+        else:
+            # For regular functions, execute normally
+            ret = self.job_func()
+
         self.last_run = datetime.datetime.now()
         self._schedule_next_run()
 
@@ -952,6 +989,13 @@ def run_pending() -> None:
     :data:`default scheduler instance <default_scheduler>`.
     """
     default_scheduler.run_pending()
+
+
+async def async_run_pending() -> None:
+    """Calls :meth:`async_run_pending <Scheduler.async_run_pending>` on the
+    :data:`default scheduler instance <default_scheduler>`.
+    """
+    await default_scheduler.async_run_pending()
 
 
 def run_all(delay_seconds: int = 0) -> None:
