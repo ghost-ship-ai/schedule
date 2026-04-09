@@ -100,7 +100,7 @@ class SchedulerTests(TestCase):
 
     def make_tz_mock_job(self, name=None):
         try:
-            import pytz
+            import pytz  # noqa: F401
         except ModuleNotFoundError:
             self.skipTest("pytz unavailable")
             return
@@ -223,7 +223,7 @@ class SchedulerTests(TestCase):
     def test_next_run_with_tag(self):
         with mock_datetime(2014, 6, 28, 12, 0):
             job1 = every(5).seconds.do(make_mock_job(name="job1")).tag("tag1")
-            job2 = every(2).hours.do(make_mock_job(name="job2")).tag("tag1", "tag2")
+            every(2).hours.do(make_mock_job(name="job2")).tag("tag1", "tag2")
             job3 = (
                 every(1)
                 .minutes.do(make_mock_job(name="job3"))
@@ -510,7 +510,7 @@ class SchedulerTests(TestCase):
 
     def test_next_run_time_hour_end(self):
         try:
-            import pytz
+            import pytz  # noqa: F401
         except ModuleNotFoundError:
             self.skipTest("pytz unavailable")
 
@@ -518,7 +518,7 @@ class SchedulerTests(TestCase):
 
     def test_next_run_time_hour_end_london(self):
         try:
-            import pytz
+            import pytz  # noqa: F401
         except ModuleNotFoundError:
             self.skipTest("pytz unavailable")
 
@@ -526,7 +526,7 @@ class SchedulerTests(TestCase):
 
     def test_next_run_time_hour_end_katmandu(self):
         try:
-            import pytz
+            import pytz  # noqa: F401
         except ModuleNotFoundError:
             self.skipTest("pytz unavailable")
 
@@ -560,7 +560,7 @@ class SchedulerTests(TestCase):
 
     def test_next_run_time_minute_end_london(self):
         try:
-            import pytz
+            import pytz  # noqa: F401
         except ModuleNotFoundError:
             self.skipTest("pytz unavailable")
 
@@ -568,7 +568,7 @@ class SchedulerTests(TestCase):
 
     def test_next_run_time_minute_end_katmhandu(self):
         try:
-            import pytz
+            import pytz  # noqa: F401
         except ModuleNotFoundError:
             self.skipTest("pytz unavailable")
 
@@ -1063,7 +1063,7 @@ class SchedulerTests(TestCase):
 
     def test_tz_weekly_large_interval_backward(self):
         mock_job = self.make_tz_mock_job()
-        import pytz
+        import pytz  # noqa: F401
 
         # Testing scheduling large intervals that skip over clock move back
         with mock_datetime(2024, 10, 25, 11, 0, 0, TZ_BERLIN):
@@ -1758,7 +1758,7 @@ class SchedulerTests(TestCase):
 
     def test_logging_without_unnecessary_str_calls(self):
         """Test that logging statements work correctly without unnecessary str() calls."""
-        import logging
+        import logging  # noqa: F401
         from unittest.mock import patch
 
         mock_job = make_mock_job()
@@ -1986,7 +1986,7 @@ class ThreadSafetyTests(TestCase):
 
     def test_scheduler_lock_is_reentrant(self):
         """Test that the scheduler lock is reentrant (RLock) to handle nested calls."""
-        import threading
+        import threading  # noqa: F401
 
         def job_that_cancels_itself():
             # This will cause _run_job to call cancel_job, testing reentrancy
@@ -2006,7 +2006,7 @@ class ThreadSafetyTests(TestCase):
     def test_multiple_schedulers_thread_safety(self):
         """Test that multiple scheduler instances can be used safely in different threads."""
         import threading
-        import time
+        import time  # noqa: F401
 
         execution_counts = {}
         execution_lock = threading.Lock()
