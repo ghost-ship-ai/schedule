@@ -2106,7 +2106,7 @@ class AsyncScheduleTests(TestCase):
 
         # Run the async job
         async def run_test():
-            await schedule.async_run_pending()
+            await schedule.async_run_all()
 
         asyncio.run(run_test())
 
@@ -2129,7 +2129,7 @@ class AsyncScheduleTests(TestCase):
         schedule.every(1).seconds.do(self.async_job_with_args, "test", number=123)
 
         async def run_test():
-            await schedule.async_run_pending()
+            await schedule.async_run_all()
 
         asyncio.run(run_test())
 
@@ -2144,7 +2144,7 @@ class AsyncScheduleTests(TestCase):
         schedule.every(1).seconds.do(self.async_job_basic)
 
         async def run_test():
-            await schedule.async_run_pending()
+            await schedule.async_run_all()
 
         asyncio.run(run_test())
 
@@ -2168,7 +2168,7 @@ class AsyncScheduleTests(TestCase):
         schedule.every(1).seconds.do(async_job)
 
         async def run_test():
-            await schedule.async_run_pending()
+            await schedule.async_run_all()
 
         asyncio.run(run_test())
 
@@ -2197,7 +2197,7 @@ class AsyncScheduleTests(TestCase):
         schedule.every(1).seconds.do(sync_job_2)
 
         async def run_test():
-            await schedule.async_run_pending()
+            await schedule.async_run_all()
 
         asyncio.run(run_test())
 
@@ -2213,7 +2213,7 @@ class AsyncScheduleTests(TestCase):
         self.assertEqual(len(schedule.get_jobs()), 1)
 
         async def run_test():
-            await schedule.async_run_pending()
+            await schedule.async_run_all()
 
         asyncio.run(run_test())
 
@@ -2227,7 +2227,7 @@ class AsyncScheduleTests(TestCase):
 
         # Exception should be caught and logged, not crash scheduler
         async def run_test():
-            await schedule.async_run_pending()
+            await schedule.async_run_all()
 
         # This should not raise an exception
         asyncio.run(run_test())
@@ -2253,7 +2253,7 @@ class AsyncScheduleTests(TestCase):
         async_scheduler.every(1).seconds.do(sync_job)
 
         async def run_test():
-            await async_scheduler.run_pending()
+            await async_scheduler.run_all()
 
         asyncio.run(run_test())
 
@@ -2314,7 +2314,7 @@ class AsyncScheduleTests(TestCase):
         self.assertFalse(job_cancel.is_async)
 
         # Run using traditional sync method
-        schedule.run_pending()
+        schedule.run_all()
 
         # Verify sync execution works exactly as before
         self.assertEqual(len(executed), 3)
@@ -2352,7 +2352,7 @@ class AsyncScheduleTests(TestCase):
         schedule.every(1).seconds.do(send_notification)
 
         async def run_test():
-            await schedule.async_run_pending()
+            await schedule.async_run_all()
 
         asyncio.run(run_test())
 
