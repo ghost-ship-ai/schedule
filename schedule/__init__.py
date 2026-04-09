@@ -576,78 +576,36 @@ class Job:
 
     @property
     def monday(self):
-        if self.interval != 1:
-            raise IntervalError(
-                "Scheduling .monday() jobs is only allowed for weekly jobs. "
-                "Using .monday() on a job scheduled to run every 2 or more weeks "
-                "is not supported."
-            )
         self.start_day = "monday"
         return self.weeks
 
     @property
     def tuesday(self):
-        if self.interval != 1:
-            raise IntervalError(
-                "Scheduling .tuesday() jobs is only allowed for weekly jobs. "
-                "Using .tuesday() on a job scheduled to run every 2 or more weeks "
-                "is not supported."
-            )
         self.start_day = "tuesday"
         return self.weeks
 
     @property
     def wednesday(self):
-        if self.interval != 1:
-            raise IntervalError(
-                "Scheduling .wednesday() jobs is only allowed for weekly jobs. "
-                "Using .wednesday() on a job scheduled to run every 2 or more weeks "
-                "is not supported."
-            )
         self.start_day = "wednesday"
         return self.weeks
 
     @property
     def thursday(self):
-        if self.interval != 1:
-            raise IntervalError(
-                "Scheduling .thursday() jobs is only allowed for weekly jobs. "
-                "Using .thursday() on a job scheduled to run every 2 or more weeks "
-                "is not supported."
-            )
         self.start_day = "thursday"
         return self.weeks
 
     @property
     def friday(self):
-        if self.interval != 1:
-            raise IntervalError(
-                "Scheduling .friday() jobs is only allowed for weekly jobs. "
-                "Using .friday() on a job scheduled to run every 2 or more weeks "
-                "is not supported."
-            )
         self.start_day = "friday"
         return self.weeks
 
     @property
     def saturday(self):
-        if self.interval != 1:
-            raise IntervalError(
-                "Scheduling .saturday() jobs is only allowed for weekly jobs. "
-                "Using .saturday() on a job scheduled to run every 2 or more weeks "
-                "is not supported."
-            )
         self.start_day = "saturday"
         return self.weeks
 
     @property
     def sunday(self):
-        if self.interval != 1:
-            raise IntervalError(
-                "Scheduling .sunday() jobs is only allowed for weekly jobs. "
-                "Using .sunday() on a job scheduled to run every 2 or more weeks "
-                "is not supported."
-            )
         self.start_day = "sunday"
         return self.weeks
 
@@ -970,7 +928,9 @@ class Job:
                     next_run = _add_months_years(next_run, years=interval)
         else:
             period = datetime.timedelta(**{self.unit: interval})
-            if interval != 1:
+            # For weekly jobs with a specific weekday, don't add extra period initially
+            # The _move_to_next_weekday already found the next occurrence
+            if interval != 1 and self.start_day is None:
                 next_run += period
 
             while next_run <= now:
