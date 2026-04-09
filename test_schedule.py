@@ -1,5 +1,6 @@
 """Unit tests for schedule.py"""
 
+import asyncio
 import datetime
 import functools
 from unittest import mock, TestCase
@@ -2049,3 +2050,370 @@ class ThreadSafetyTests(TestCase):
         self.assertEqual(len(execution_counts), 5)
         for count in execution_counts.values():
             self.assertEqual(count, 1)
+
+
+class AsyncScheduleTests(TestCase):
+    """Test async functionality of the schedule library."""
+
+    def setUp(self):
+        schedule.clear()
+        self.scheduler = schedule.Scheduler()
+        self.async_scheduler = schedule.AsyncScheduler()
+
+    def tearDown(self):
+        schedule.clear()
+
+    # Core Async Functionality Tests
+
+    def test_async_job_basic(self):
+        """Test basic async job scheduling and execution."""
+        executed = []
+
+        async def async_job():
+            await asyncio.sleep(0.01)
+            executed.append("async_job")
+            return "async_result"
+
+        # Schedule async job
+        job = self.scheduler.every().second.do(async_job)
+        self.assertTrue(job.is_async)
+
+        # Run async job
+        async def run_test():
+            await self.scheduler.async_run_pending()
+
+        asyncio.run(run_test())
+        self.assertEqual(executed, ["async_job"])
+
+    def test_async_scheduler_class(self):
+        """Test dedicated AsyncScheduler class."""
+        executed = []
+
+        async def async_job():
+            await asyncio.sleep(0.01)
+            executed.append("async_scheduler_job")
+
+        # Schedule with AsyncScheduler
+        self.async_scheduler.every().second.do(async_job)
+
+        async def run_test():
+            await self.async_scheduler.run_pending()
+
+        asyncio.run(run_test())
+        self.assertEqual(executed, ["async_scheduler_job"])
+
+    def test_async_job_detection(self):
+        """Test proper async function detection."""
+        async def async_func():
+            pass
+
+        def sync_func():
+            pass
+
+        async_job = self.scheduler.every().second.do(async_func)
+        sync_job = self.scheduler.every().second.do(sync_func)
+
+        self.assertTrue(async_job.is_async)
+        self.assertFalse(sync_job.is_async)
+
+    def test_async_job_arguments(self):
+        """Test async jobs with args, kwargs, and return values."""
+        results = []
+
+        async def async_job_with_args(name, value=None):
+            await asyncio.sleep(0.01)
+            results.append(f"{name}:{value}")
+            return f"result_{name}"
+
+        # Schedule with args and kwargs
+        self.scheduler.every().second.do(async_job_with_args, "test", value="data")
+
+        async def run_test():
+            await self.scheduler.async_run_pending()
+
+        asyncio.run(run_test())
+        self.assertEqual(results, ["test:data"])
+
+    # Mixed Mode Operations Tests
+
+    def test_mixed_sync_async_execution(self):
+        """Test sync and async jobs in same scheduler."""
+        executed = []
+
+        def sync_job():
+            executed.append("sync")
+
+        async def async_job():
+            await asyncio.sleep(0.01)
+            executed.append("async")
+
+        # Schedule both types
+        self.scheduler.every().second.do(sync_job)
+        self.scheduler.every().second.do(async_job)
+
+        async def run_test():
+            await self.scheduler.async_run_pending()
+
+        asyncio.run(run_test())
+        self.assertEqual(set(executed), {"sync", "async"})
+
+    def test_async_run_pending_mixed(self):
+        """Test mixed jobs with async_run_pending()."""
+        executed = []
+
+        def sync_job():
+            executed.append("sync_mixed")
+
+        async def async_job():
+            await asyncio.sleep(0.01)
+            executed.append("async_mixed")
+
+        self.scheduler.every().second.do(sync_job)
+        self.scheduler.every().second.do(async_job)
+
+        async def run_test():
+            await self.scheduler.async_run_pending()
+
+        asyncio.run(run_test())
+        self.assertEqual(set(executed), {"sync_mixed", "async_mixed"})
+
+    def test_async_job_ordering(self):
+        """Test execution order preservation in mixed mode."""
+        executed = []
+
+        def sync_job1():
+            executed.append("sync1")
+
+        async def async_job():
+            await asyncio.sleep(0.01)
+            executed.append("async")
+
+        def sync_job2():
+            executed.append("sync2")
+
+        # Schedule in specific order
+        job1 = self.scheduler.every().second.do(sync_job1)
+        job2 = self.scheduler.every().second.do(async_job)
+        job3 = self.scheduler.every().second.do(sync_job2)
+
+        # Manually set next_run to ensure order
+        base_time = datetime.datetime.now()
+        job1.next_run = base_time
+        job2.next_run = base_time + datetime.timedelta(seconds=1)
+        job3.next_run = base_time + datetime.timedelta(seconds=2)
+
+        async def run_test():
+            await self.scheduler.async_run_pending()
+
+        asyncio.run(run_test())
+        # Only the first job should run (others are scheduled for later)
+        self.assertEqual(executed, ["sync1"])
+
+    # Advanced Scenarios Tests
+
+    def test_async_job_cancellation(self):
+        """Test CancelJob behavior with async jobs."""
+        executed = []
+
+        async def cancelling_async_job():
+            await asyncio.sleep(0.01)
+            executed.append("cancelled")
+            return schedule.CancelJob
+
+        job = self.scheduler.every().second.do(cancelling_async_job)
+        initial_job_count = len(self.scheduler.jobs)
+
+        async def run_test():
+            await self.scheduler.async_run_pending()
+
+        asyncio.run(run_test())
+
+        self.assertEqual(executed, ["cancelled"])
+        self.assertEqual(len(self.scheduler.jobs), initial_job_count - 1)
+
+    def test_async_exception_handling(self):
+        """Test exception propagation and logging."""
+        executed = []
+
+        async def failing_async_job():
+            await asyncio.sleep(0.01)
+            executed.append("before_exception")
+            raise ValueError("Test async exception")
+
+        async def normal_async_job():
+            await asyncio.sleep(0.01)
+            executed.append("normal_job")
+
+        self.scheduler.every().second.do(failing_async_job)
+        self.scheduler.every().second.do(normal_async_job)
+
+        async def run_test():
+            await self.scheduler.async_run_pending()
+
+        # Should not raise exception, but log it
+        asyncio.run(run_test())
+
+        # Normal job should still execute despite exception in other job
+        self.assertIn("before_exception", executed)
+        self.assertIn("normal_job", executed)
+
+    def test_async_job_timeout(self):
+        """Test long-running async jobs."""
+        executed = []
+
+        async def long_running_job():
+            await asyncio.sleep(0.1)  # Longer delay
+            executed.append("long_job")
+
+        async def quick_job():
+            executed.append("quick_job")
+
+        self.scheduler.every().second.do(long_running_job)
+        self.scheduler.every().second.do(quick_job)
+
+        async def run_test():
+            await self.scheduler.async_run_pending()
+
+        asyncio.run(run_test())
+        self.assertEqual(set(executed), {"long_job", "quick_job"})
+
+    def test_nested_event_loops(self):
+        """Test behavior when event loop already running."""
+        executed = []
+
+        async def async_job():
+            executed.append("nested_job")
+
+        self.scheduler.every().second.do(async_job)
+
+        async def run_test():
+            # This simulates running in an already-running event loop
+            await self.scheduler.async_run_pending()
+
+        asyncio.run(run_test())
+        self.assertEqual(executed, ["nested_job"])
+
+    # Integration & Performance Tests
+
+    def test_async_run_continuously(self):
+        """Test async continuous scheduler operation."""
+        executed = []
+
+        async def periodic_job():
+            executed.append("periodic")
+
+        self.async_scheduler.every().second.do(periodic_job)
+
+        async def run_test():
+            # Run for a short time then stop
+            task = asyncio.create_task(self.async_scheduler.run_continuously(0.1))
+            await asyncio.sleep(0.25)  # Let it run for a bit
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        asyncio.run(run_test())
+        # Should have executed at least once
+        self.assertGreater(len(executed), 0)
+
+    def test_async_performance(self):
+        """Test performance comparison sync vs async execution."""
+        sync_executed = []
+        async_executed = []
+
+        def sync_job():
+            sync_executed.append("sync")
+
+        async def async_job():
+            await asyncio.sleep(0.001)
+            async_executed.append("async")
+
+        # Schedule multiple jobs
+        for i in range(5):
+            self.scheduler.every().second.do(sync_job)
+            self.scheduler.every().second.do(async_job)
+
+        async def run_test():
+            start_time = time.time()
+            await self.scheduler.async_run_pending()
+            end_time = time.time()
+            return end_time - start_time
+
+        execution_time = asyncio.run(run_test())
+
+        self.assertEqual(len(sync_executed), 5)
+        self.assertEqual(len(async_executed), 5)
+        # Should complete reasonably quickly
+        self.assertLess(execution_time, 1.0)
+
+    def test_real_world_async_usage(self):
+        """Test real-world async usage patterns."""
+        results = []
+
+        async def fetch_data(url):
+            # Simulate HTTP request
+            await asyncio.sleep(0.01)
+            results.append(f"fetched_{url}")
+
+        async def process_data():
+            # Simulate data processing
+            await asyncio.sleep(0.01)
+            results.append("processed")
+
+        async def save_data():
+            # Simulate database save
+            await asyncio.sleep(0.01)
+            results.append("saved")
+
+        # Schedule different types of async jobs
+        self.scheduler.every().second.do(fetch_data, "api.example.com")
+        self.scheduler.every().second.do(process_data)
+        self.scheduler.every().second.do(save_data)
+
+        async def run_test():
+            await self.scheduler.async_run_pending()
+
+        asyncio.run(run_test())
+        self.assertEqual(set(results), {"fetched_api.example.com", "processed", "saved"})
+
+    def test_backward_compatibility_comprehensive(self):
+        """Test that sync-only code continues to work unchanged."""
+        executed = []
+
+        def sync_job():
+            executed.append("backward_compatible")
+
+        # Use traditional sync scheduling
+        schedule.every().second.do(sync_job)
+        schedule.run_pending()
+
+        self.assertEqual(executed, ["backward_compatible"])
+
+        # Clear for next test
+        schedule.clear()
+
+        # Test with scheduler instance
+        scheduler = schedule.Scheduler()
+        scheduler.every().second.do(sync_job)
+        scheduler.run_pending()
+
+        self.assertEqual(executed, ["backward_compatible", "backward_compatible"])
+
+    def test_module_level_async_run_pending(self):
+        """Test module-level async_run_pending function."""
+        executed = []
+
+        async def module_async_job():
+            await asyncio.sleep(0.01)
+            executed.append("module_async")
+
+        # Use module-level scheduling
+        schedule.every().second.do(module_async_job)
+
+        async def run_test():
+            await schedule.async_run_pending()
+
+        asyncio.run(run_test())
+        self.assertEqual(executed, ["module_async"])
