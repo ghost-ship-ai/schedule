@@ -2278,7 +2278,7 @@ class AsyncScheduleTests(TestCase):
         async_scheduler.every(1).seconds.do(sync_job)
 
         async def run_test():
-            await async_scheduler.run_all()
+            await async_scheduler.run_all_async()
 
         asyncio.run(run_test())
 
@@ -2305,7 +2305,7 @@ class AsyncScheduleTests(TestCase):
         async_scheduler.every(10).minutes.do(sync_job)
 
         async def run_test():
-            await async_scheduler.run_all()
+            await async_scheduler.run_all_async()
 
         asyncio.run(run_test())
 

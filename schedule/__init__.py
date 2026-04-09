@@ -198,9 +198,7 @@ class Scheduler:
                 del self.jobs[:]
             else:
                 logger.debug('Deleting all jobs tagged "%s"', tag)
-                self.jobs[:] = (
-                    job for job in self.jobs if tag not in job.tags
-                )
+                self.jobs[:] = (job for job in self.jobs if tag not in job.tags)
 
     def cancel_job(self, job: "Job") -> None:
         """
@@ -298,13 +296,13 @@ class AsyncScheduler(Scheduler):
     jobs seamlessly.
     """
 
-    async def run_pending(self) -> None:
+    async def run_pending_async(self) -> None:
         """
         Async version of run_pending that handles both sync and async jobs.
         """
         await super().async_run_pending()
 
-    async def run_all(self, delay_seconds: int = 0) -> None:
+    async def run_all_async(self, delay_seconds: int = 0) -> None:
         """
         Run all jobs regardless if they are scheduled to run or not.
 
