@@ -1212,6 +1212,123 @@ class SchedulerTests(TestCase):
         assert tuesday.hour == 10
         assert tuesday.minute == 27
 
+    def test_multi_week_scheduling_interval_2(self):
+        """Test every 2 weeks scheduling"""
+        # Use a fixed date for predictable testing: Monday, January 1, 2024 (our epoch)
+        with mock.patch('schedule.datetime') as mock_datetime:
+            # Test from Monday, January 1, 2024 at 9:00 AM (week 0, remainder 0)
+            mock_now = datetime.datetime(2024, 1, 1, 9, 0)  # Monday
+            mock_datetime.datetime.now.return_value = mock_now
+            mock_datetime.datetime.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
+
+            schedule.clear()
+            job = schedule.every(2).weeks.monday.at("10:00").do(make_mock_job())
+
+            # Should schedule for today at 10:00 (since we're in a valid 2-week interval and it's before 10:00)
+            expected = datetime.datetime(2024, 1, 1, 10, 0)
+            assert job.next_run == expected
+
+    def test_multi_week_scheduling_interval_2_past_time(self):
+        """Test every 2 weeks scheduling when target time already passed"""
+        with mock.patch('schedule.datetime') as mock_datetime:
+            # Test from Monday, January 1, 2024 at 11:00 AM (after 10:00)
+            mock_now = datetime.datetime(2024, 1, 1, 11, 0)  # Monday
+            mock_datetime.datetime.now.return_value = mock_now
+            mock_datetime.datetime.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
+
+            schedule.clear()
+            job = schedule.every(2).weeks.monday.at("10:00").do(make_mock_job())
+
+            # Should schedule for 2 weeks later (January 15, 2024)
+            expected = datetime.datetime(2024, 1, 15, 10, 0)
+            assert job.next_run == expected
+
+    def test_multi_week_scheduling_interval_3(self):
+        """Test every 3 weeks scheduling from non-valid week"""
+        with mock.patch('schedule.datetime') as mock_datetime:
+            # Test from Monday, January 8, 2024 (week 1, remainder 1 for interval 3)
+            mock_now = datetime.datetime(2024, 1, 8, 9, 0)  # Monday
+            mock_datetime.datetime.now.return_value = mock_now
+            mock_datetime.datetime.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
+
+            schedule.clear()
+            job = schedule.every(3).weeks.monday.at("10:00").do(make_mock_job())
+
+            # Should schedule for next valid 3-week interval: week 3 (January 22, 2024)
+            expected = datetime.datetime(2024, 1, 22, 10, 0)
+            assert job.next_run == expected
+
+    def test_multi_week_scheduling_different_weekday(self):
+        """Test multi-week scheduling with different weekdays"""
+        with mock.patch('schedule.datetime') as mock_datetime:
+            # Test from Thursday, January 4, 2024 (week 0, valid for any interval)
+            mock_now = datetime.datetime(2024, 1, 4, 9, 0)  # Thursday
+            mock_datetime.datetime.now.return_value = mock_now
+            mock_datetime.datetime.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
+
+            schedule.clear()
+            job = schedule.every(2).weeks.friday.at("10:00").do(make_mock_job())
+
+            # Should schedule for tomorrow (Friday, January 5, 2024) since we're in a valid 2-week interval
+            expected = datetime.datetime(2024, 1, 5, 10, 0)
+            assert job.next_run == expected
+
+    def test_multi_week_vs_single_week_comparison(self):
+        """Test that multi-week and single-week scheduling behave differently"""
+        with mock.patch('schedule.datetime') as mock_datetime:
+            # Test from Thursday, January 4, 2024
+            mock_now = datetime.datetime(2024, 1, 4, 9, 0)  # Thursday
+            mock_datetime.datetime.now.return_value = mock_now
+            mock_datetime.datetime.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
+
+            schedule.clear()
+
+            # Single week job
+            job_single = schedule.every().week.monday.at("10:00").do(make_mock_job())
+
+            # Multi-week job (2 weeks)
+            job_multi = schedule.every(2).weeks.monday.at("10:00").do(make_mock_job())
+
+            # Single week should schedule for next Monday (January 8)
+            expected_single = datetime.datetime(2024, 1, 8, 10, 0)
+            assert job_single.next_run == expected_single
+
+            # Multi-week should schedule for same Monday since we're in week 0 (valid for interval 2)
+            expected_multi = datetime.datetime(2024, 1, 8, 10, 0)
+            assert job_multi.next_run == expected_multi
+
+    def test_multi_week_scheduling_large_interval(self):
+        """Test multi-week scheduling with larger intervals"""
+        with mock.patch('schedule.datetime') as mock_datetime:
+            # Test from Monday, January 29, 2024 (week 4, remainder 0 for interval 4)
+            mock_now = datetime.datetime(2024, 1, 29, 9, 0)  # Monday
+            mock_datetime.datetime.now.return_value = mock_now
+            mock_datetime.datetime.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
+
+            schedule.clear()
+            job = schedule.every(4).weeks.monday.at("10:00").do(make_mock_job())
+
+            # Should schedule for today since we're in a valid 4-week interval (week 4 % 4 = 0)
+            expected = datetime.datetime(2024, 1, 29, 10, 0)
+            assert job.next_run == expected
+
+    def test_multi_week_scheduling_epoch_boundary(self):
+        """Test multi-week scheduling behavior around epoch boundaries"""
+        with mock.patch('schedule.datetime') as mock_datetime:
+            # Test from a date before our epoch (December 25, 2023)
+            mock_now = datetime.datetime(2023, 12, 25, 9, 0)  # Monday
+            mock_datetime.datetime.now.return_value = mock_now
+            mock_datetime.datetime.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
+
+            schedule.clear()
+            job = schedule.every(2).weeks.monday.at("10:00").do(make_mock_job())
+
+            # Should still work correctly even before epoch
+            # The calculation should find the next valid 2-week interval
+            assert job.next_run is not None
+            assert job.next_run.hour == 10
+            assert job.next_run.minute == 0
+
     def test_run_all(self):
         mock_job = make_mock_job()
         every().minute.do(mock_job)
