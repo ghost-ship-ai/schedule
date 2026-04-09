@@ -1360,6 +1360,29 @@ class SchedulerTests(TestCase):
         s3 = repr(schedule.every(10))
         assert s3 == "Every 10 None do [None] (last run: [never], next run: [never])"
 
+        # Test the specific bug case: interval=1 with unit=None should not crash
+        s4 = repr(schedule.every(1))
+        assert s4 == "Every 1 None do [None] (last run: [never], next run: [never])"
+
+    def test_repr_with_none_unit_bug_fix(self):
+        """Test for bug fix: TypeError in Job.__repr__ when unit is None"""
+        # Test case 1: interval=1, unit=None (triggers unit[:-1] path)
+        job1 = schedule.every(1)
+        repr_str1 = repr(job1)  # Should not crash
+        assert "Every 1 None" in repr_str1
+
+        # Test case 2: interval!=1, unit=None (triggers unit path)
+        job2 = schedule.every(10)
+        repr_str2 = repr(job2)  # Should not crash
+        assert "Every 10 None" in repr_str2
+
+        # Test case 3: interval=1, unit=None, with at_time set (different code path)
+        job3 = schedule.every(1)
+        # Simulate a partially configured job with at_time but no unit
+        job3.at_time = datetime.time(10, 30)
+        repr_str3 = repr(job3)  # Should not crash
+        assert "Every 1 None at 10:30:00" in repr_str3
+
     def test_to_string_lambda_job_func(self):
         assert len(str(every().minute.do(lambda: 1))) > 1
         assert len(str(every().day.at("10:30").do(lambda: 1))) > 1
