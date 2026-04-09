@@ -48,6 +48,7 @@ import functools
 import logging
 import random
 import re
+import threading
 import time
 from typing import Set, List, Optional, Callable, Union
 
@@ -89,6 +90,7 @@ class Scheduler:
 
     def __init__(self) -> None:
         self.jobs: List[Job] = []
+        self._lock = threading.RLock()
 
     def run_pending(self) -> None:
         """
@@ -100,9 +102,10 @@ class Scheduler:
         in one hour increments then your job won't be run 60 times in
         between but only once.
         """
-        runnable_jobs = (job for job in self.jobs if job.should_run)
-        for job in sorted(runnable_jobs):
-            self._run_job(job)
+        with self._lock:
+            runnable_jobs = (job for job in self.jobs if job.should_run)
+            for job in sorted(runnable_jobs):
+                self._run_job(job)
 
     def run_all(self, delay_seconds: int = 0) -> None:
         """
@@ -114,14 +117,15 @@ class Scheduler:
 
         :param delay_seconds: A delay added between every executed job
         """
-        logger.debug(
-            "Running *all* %i jobs with %is delay in between",
-            len(self.jobs),
-            delay_seconds,
-        )
-        for job in self.jobs[:]:
-            self._run_job(job)
-            time.sleep(delay_seconds)
+        with self._lock:
+            logger.debug(
+                "Running *all* %i jobs with %is delay in between",
+                len(self.jobs),
+                delay_seconds,
+            )
+            for job in self.jobs[:]:
+                self._run_job(job)
+                time.sleep(delay_seconds)
 
     def get_jobs(self, tag: Optional[Hashable] = None) -> List["Job"]:
         """
@@ -131,10 +135,11 @@ class Scheduler:
         :param tag: An identifier used to identify a subset of
                     jobs to retrieve
         """
-        if tag is None:
-            return self.jobs[:]
-        else:
-            return [job for job in self.jobs if tag in job.tags]
+        with self._lock:
+            if tag is None:
+                return self.jobs[:]
+            else:
+                return [job for job in self.jobs if tag in job.tags]
 
     def clear(self, tag: Optional[Hashable] = None) -> None:
         """
@@ -144,12 +149,13 @@ class Scheduler:
         :param tag: An identifier used to identify a subset of
                     jobs to delete
         """
-        if tag is None:
-            logger.debug("Deleting *all* jobs")
-            del self.jobs[:]
-        else:
-            logger.debug('Deleting all jobs tagged "%s"', tag)
-            self.jobs[:] = (job for job in self.jobs if tag not in job.tags)
+        with self._lock:
+            if tag is None:
+                logger.debug("Deleting *all* jobs")
+                del self.jobs[:]
+            else:
+                logger.debug('Deleting all jobs tagged "%s"', tag)
+                self.jobs[:] = (job for job in self.jobs if tag not in job.tags)
 
     def cancel_job(self, job: "Job") -> None:
         """
@@ -157,11 +163,12 @@ class Scheduler:
 
         :param job: The job to be unscheduled
         """
-        try:
-            logger.debug('Cancelling job "%s"', job)
-            self.jobs.remove(job)
-        except ValueError:
-            logger.debug('Cancelling not-scheduled job "%s"', job)
+        with self._lock:
+            try:
+                logger.debug('Cancelling job "%s"', job)
+                self.jobs.remove(job)
+            except ValueError:
+                logger.debug('Cancelling not-scheduled job "%s"', job)
 
     def every(self, interval: int = 1) -> "Job":
         """
@@ -189,12 +196,13 @@ class Scheduler:
         :return: A :class:`~datetime.datetime` object
                  or None if no jobs scheduled
         """
-        if not self.jobs:
-            return None
-        jobs_filtered = self.get_jobs(tag)
-        if not jobs_filtered:
-            return None
-        return min(jobs_filtered).next_run
+        with self._lock:
+            if not self.jobs:
+                return None
+            jobs_filtered = self.get_jobs(tag)
+            if not jobs_filtered:
+                return None
+            return min(jobs_filtered).next_run
 
     next_run = property(get_next_run)
 
@@ -205,9 +213,10 @@ class Scheduler:
                  :meth:`next_run <Scheduler.next_run>`
                  or None if no jobs are scheduled
         """
-        if not self.next_run:
-            return None
-        return (self.next_run - datetime.datetime.now()).total_seconds()
+        with self._lock:
+            if not self.next_run:
+                return None
+            return (self.next_run - datetime.datetime.now()).total_seconds()
 
 
 def _add_months_years(
@@ -726,7 +735,8 @@ class Job:
                 "Unable to a add job to schedule. "
                 "Job is not associated with an scheduler"
             )
-        self.scheduler.jobs.append(self)
+        with self.scheduler._lock:
+            self.scheduler.jobs.append(self)
         return self
 
     @property
