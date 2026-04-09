@@ -7,13 +7,63 @@ on:
     types: [created]
 
 jobs:
-  relay:
-    if: |
-      (github.event_name == 'issues' && github.event.label.name == 'fix-me') ||
-      (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '@ghost-ship-ai'))
+  plan:
+    # fix-me label → dispatch plan-issue (not fix-issue)
+    if: github.event_name == 'issues' && github.event.label.name == 'fix-me'
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch to Ghost Ship
+      - name: Dispatch plan-issue
+        run: |
+          set -e
+          HTTP_CODE=$(curl -s -o /tmp/dispatch_response -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ secrets.GHOST_SHIP_REPO }}/dispatches" \
+            -d '{
+              "event_type": "plan-issue",
+              "client_payload": {
+                "repo": "${{ github.repository }}",
+                "issue_number": ${{ github.event.issue.number }}
+              }
+            }')
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Dispatch failed with HTTP ${HTTP_CODE}:"
+            cat /tmp/dispatch_response
+            exit 1
+          fi
+          echo "Dispatched plan-issue (HTTP ${HTTP_CODE})"
+
+  approve:
+    # Comment containing "approve" on a planned issue → dispatch fix-issue
+    if: >-
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, 'approve') &&
+      !startsWith(github.event.comment.body, '@ghost-ship-ai')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for planned label
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+        run: |
+          LABELS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/labels --jq '.[].name' 2>/dev/null || echo "")
+          if echo "$LABELS" | grep -q "planned"; then
+            echo "has_plan=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_plan=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Swap labels to approved
+        if: steps.check.outputs.has_plan == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/labels/planned -X DELETE 2>/dev/null || true
+          gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/labels \
+            --method POST -f "labels[]=approved" 2>/dev/null || true
+
+      - name: Dispatch fix-issue
+        if: steps.check.outputs.has_plan == 'true'
         run: |
           set -e
           HTTP_CODE=$(curl -s -o /tmp/dispatch_response -w "%{http_code}" -X POST \
@@ -24,8 +74,7 @@ jobs:
               "event_type": "fix-issue",
               "client_payload": {
                 "repo": "${{ github.repository }}",
-                "issue_number": ${{ github.event.issue.number }},
-                "trigger": "${{ github.event_name }}"
+                "issue_number": ${{ github.event.issue.number }}
               }
             }')
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
@@ -34,3 +83,44 @@ jobs:
             exit 1
           fi
           echo "Dispatched fix-issue (HTTP ${HTTP_CODE})"
+
+  revise:
+    # @ghost-ship-ai comment on a planned issue → dispatch revise-plan
+    if: >-
+      github.event_name == 'issue_comment' &&
+      startsWith(github.event.comment.body, '@ghost-ship-ai')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for planned label
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+        run: |
+          LABELS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/labels --jq '.[].name' 2>/dev/null || echo "")
+          if echo "$LABELS" | grep -q "planned"; then
+            echo "has_plan=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_plan=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dispatch revise-plan
+        if: steps.check.outputs.has_plan == 'true'
+        run: |
+          set -e
+          HTTP_CODE=$(curl -s -o /tmp/dispatch_response -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ secrets.GHOST_SHIP_REPO }}/dispatches" \
+            -d '{
+              "event_type": "revise-plan",
+              "client_payload": {
+                "repo": "${{ github.repository }}",
+                "issue_number": ${{ github.event.issue.number }}
+              }
+            }')
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Dispatch failed with HTTP ${HTTP_CODE}:"
+            cat /tmp/dispatch_response
+            exit 1
+          fi
+          echo "Dispatched revise-plan (HTTP ${HTTP_CODE})"
