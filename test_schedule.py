@@ -1764,14 +1764,16 @@ class SchedulerTests(TestCase):
         job = every().second.do(mock_job)
 
         # Test cancel_job logging
-        with patch('schedule.logger.debug') as mock_debug:
+        with patch("schedule.logger.debug") as mock_debug:
             schedule.cancel_job(job)
             # Verify that logger.debug was called with the job object directly
             mock_debug.assert_called_with('Cancelling job "%s"', job)
 
         # Test cancel_job logging for non-existent job
-        with patch('schedule.logger.debug') as mock_debug:
-            schedule.cancel_job(job)  # Job already cancelled, should trigger ValueError path
+        with patch("schedule.logger.debug") as mock_debug:
+            schedule.cancel_job(
+                job
+            )  # Job already cancelled, should trigger ValueError path
             # Verify that logger.debug was called with the job object directly
             mock_debug.assert_called_with('Cancelling not-scheduled job "%s"', job)
 
