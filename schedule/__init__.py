@@ -1150,31 +1150,18 @@ def _move_to_next_weekday(moment: datetime.datetime, weekday: str):
 
 def _move_to_next_weekday_with_interval(moment: datetime.datetime, weekday: str, interval: int):
     """
-    Move the given timestamp to the next occurrence of the given weekday
-    that respects the multi-week interval. For interval=1, this behaves
-    the same as _move_to_next_weekday. For interval>1, it finds the next
-    occurrence that falls on the correct week boundary.
+    Move the given timestamp to the next occurrence of the given weekday.
+    For multi-week intervals, this finds the immediate next occurrence of the weekday.
+    The interval spacing is handled by the main scheduling logic through period addition.
+
+    This approach is more user-friendly because:
+    1. The first run is always the next occurrence of the target weekday
+    2. Subsequent runs are spaced exactly `interval` weeks apart
+    3. The schedule is predictable and doesn't depend on arbitrary reference points
     """
-    if interval == 1:
-        return _move_to_next_weekday(moment, weekday)
-
-    # Find the next occurrence of the weekday
-    next_weekday = _move_to_next_weekday(moment, weekday)
-
-    # For multi-week intervals, we need to ensure we're on the right week boundary
-    # We'll use a reference point (epoch) and calculate weeks from there
-    epoch = datetime.datetime(1970, 1, 5)  # Monday, Jan 5, 1970 (first Monday after epoch)
-
-    # Calculate how many weeks have passed since the epoch
-    weeks_since_epoch = (next_weekday - epoch).days // 7
-
-    # Check if this week aligns with our interval
-    if weeks_since_epoch % interval == 0:
-        return next_weekday
-
-    # If not, move to the next aligned week
-    weeks_to_add = interval - (weeks_since_epoch % interval)
-    return next_weekday + datetime.timedelta(weeks=weeks_to_add)
+    # For both single-week and multi-week intervals, find the next occurrence
+    # The interval spacing will be handled by the period addition in _schedule_next_run
+    return _move_to_next_weekday(moment, weekday)
 
 
 def _weekday_index(day: str) -> int:
