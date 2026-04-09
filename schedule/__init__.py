@@ -175,7 +175,9 @@ class Scheduler:
                 del self.jobs[:]
             else:
                 logger.debug('Deleting all jobs tagged "%s"', tag)
-                self.jobs[:] = (job for job in self.jobs if tag not in job.tags)
+                self.jobs[:] = (
+                    job for job in self.jobs if tag not in job.tags
+                )
 
     def cancel_job(self, job: "Job") -> None:
         """
@@ -293,9 +295,11 @@ def _add_months_years(
 
 class AsyncScheduler(Scheduler):
     """
-    An async-first scheduler for periodic jobs that provides native async support.
+    An async-first scheduler for periodic jobs that provides native async
+    support.
 
-    This scheduler is designed for async environments and provides async versions
+    This scheduler is designed for async environments and provides async
+    versions
     of all scheduling methods. It inherits from Scheduler and adds async-native
     implementations of run_pending, run_continuously, and run_all.
     """
@@ -311,9 +315,11 @@ class AsyncScheduler(Scheduler):
 
     async def run_continuously(self, interval: int = 1) -> None:
         """
-        Continuously run, executing any pending jobs at each elapsed time interval.
+        Continuously run, executing any pending jobs at each elapsed time
+        interval.
 
-        :param interval: Time interval between checks for pending jobs (in seconds)
+        :param interval: Time interval between checks for pending jobs
+                        (in seconds)
         """
         while True:
             await self.run_pending()
@@ -361,7 +367,8 @@ class Job:
     def __init__(self, interval: int, scheduler: Optional[Scheduler] = None):
         self.interval: int = interval  # pause interval * unit between runs
         self.latest: Optional[int] = None  # upper limit to the interval
-        self.job_func: Optional[functools.partial] = None  # the job job_func to run
+        self.job_func: Optional[functools.partial] = None  # the job
+        # job_func to run
 
         # time units, e.g. 'minutes', 'hours', ...
         self.unit: Optional[str] = None
@@ -369,7 +376,8 @@ class Job:
         # optional time at which this job runs
         self.at_time: Optional[datetime.time] = None
 
-        # optional time zone of the self.at_time field. Only relevant when at_time is not None
+        # optional time zone of the self.at_time field. Only relevant when
+        # at_time is not None
         self.at_time_zone = None
 
         # datetime of the last run
@@ -379,14 +387,16 @@ class Job:
         self.next_run: Optional[datetime.datetime] = None
 
         # Weekday to run the job at. Only relevant when unit is 'weeks'.
-        # For example, when asking 'every week on tuesday' the start_day is 'tuesday'.
+        # For example, when asking 'every week on tuesday' the start_day is
+        # 'tuesday'.
         self.start_day: Optional[str] = None
 
         # optional time of final run
         self.cancel_after: Optional[datetime.datetime] = None
 
         self.tags: Set[Hashable] = set()  # unique set of tags for the job
-        self.scheduler: Optional[Scheduler] = scheduler  # scheduler to register with
+        self.scheduler: Optional[Scheduler] = scheduler  # scheduler to
+        # register with
         self.is_async: bool = False  # whether the job function is a coroutine
 
     def __lt__(self, other) -> bool:
@@ -428,8 +438,13 @@ class Job:
             job_func_name = repr(self.job_func)
 
         if self.job_func is not None:
-            args = [repr(x) if is_repr(x) else str(x) for x in self.job_func.args]
-            kwargs = ["%s=%s" % (k, repr(v)) for k, v in self.job_func.keywords.items()]
+            args = [
+                repr(x) if is_repr(x) else str(x) for x in self.job_func.args
+            ]
+            kwargs = [
+                "%s=%s" % (k, repr(v))
+                for k, v in self.job_func.keywords.items()
+            ]
             call_repr = job_func_name + "(" + ", ".join(args + kwargs) + ")"
         else:
             call_repr = "[None]"
@@ -545,8 +560,8 @@ class Job:
         if self.interval != 1:
             raise IntervalError(
                 "Scheduling .monday() jobs is only allowed for weekly jobs. "
-                "Using .monday() on a job scheduled to run every 2 or more weeks "
-                "is not supported."
+                "Using .monday() on a job scheduled to run every 2 or more "
+                "weeks is not supported."
             )
         self.start_day = "monday"
         return self.weeks
@@ -556,8 +571,8 @@ class Job:
         if self.interval != 1:
             raise IntervalError(
                 "Scheduling .tuesday() jobs is only allowed for weekly jobs. "
-                "Using .tuesday() on a job scheduled to run every 2 or more weeks "
-                "is not supported."
+                "Using .tuesday() on a job scheduled to run every 2 or more "
+                "weeks is not supported."
             )
         self.start_day = "tuesday"
         return self.weeks
@@ -701,7 +716,11 @@ class Job:
             hour = 0
             minute = 0
             _, second = time_values
-        elif len(time_values) == 2 and self.unit == "hours" and len(time_values[0]):
+        elif (
+            len(time_values) == 2
+            and self.unit == "hours"
+            and len(time_values[0])
+        ):
             hour = 0
             minute, second = time_values
         else:
@@ -741,7 +760,9 @@ class Job:
 
     def until(
         self,
-        until_time: Union[datetime.datetime, datetime.timedelta, datetime.time, str],
+        until_time: Union[
+            datetime.datetime, datetime.timedelta, datetime.time, str
+        ],
     ):
         """
         Schedule job to run until the specified moment.
@@ -952,7 +973,10 @@ class Job:
 
         kwargs = {"second": self.at_time.second, "microsecond": 0}
 
-        if self.unit in ["days", "months", "years"] or self.start_day is not None:
+        if (
+            self.unit in ["days", "months", "years"]
+            or self.start_day is not None
+        ):
             kwargs["hour"] = self.at_time.hour
 
         if (
