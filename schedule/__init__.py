@@ -909,7 +909,7 @@ class Job:
         if self.start_day is not None:
             if self.unit != "weeks":
                 raise ScheduleValueError("`unit` should be 'weeks'")
-            next_run = _move_to_next_weekday(next_run, self.start_day)
+            next_run = _move_to_next_weekday_with_interval(next_run, self.start_day, interval)
 
         if self.at_time is not None:
             next_run = self._move_to_at_time(next_run)
@@ -929,7 +929,7 @@ class Job:
         else:
             period = datetime.timedelta(**{self.unit: interval})
             # For weekly jobs with a specific weekday, don't add extra period initially
-            # The _move_to_next_weekday already found the next occurrence
+            # The _move_to_next_weekday_with_interval already found the correct occurrence
             if interval != 1 and self.start_day is None:
                 next_run += period
 
@@ -1146,6 +1146,35 @@ def _move_to_next_weekday(moment: datetime.datetime, weekday: str):
         # Target day already happened this week, move to next week
         days_ahead += 7
     return moment + datetime.timedelta(days=days_ahead)
+
+
+def _move_to_next_weekday_with_interval(moment: datetime.datetime, weekday: str, interval: int):
+    """
+    Move the given timestamp to the next occurrence of the given weekday
+    that respects the multi-week interval. For interval=1, this behaves
+    the same as _move_to_next_weekday. For interval>1, it finds the next
+    occurrence that falls on the correct week boundary.
+    """
+    if interval == 1:
+        return _move_to_next_weekday(moment, weekday)
+
+    # Find the next occurrence of the weekday
+    next_weekday = _move_to_next_weekday(moment, weekday)
+
+    # For multi-week intervals, we need to ensure we're on the right week boundary
+    # We'll use a reference point (epoch) and calculate weeks from there
+    epoch = datetime.datetime(1970, 1, 5)  # Monday, Jan 5, 1970 (first Monday after epoch)
+
+    # Calculate how many weeks have passed since the epoch
+    weeks_since_epoch = (next_weekday - epoch).days // 7
+
+    # Check if this week aligns with our interval
+    if weeks_since_epoch % interval == 0:
+        return next_weekday
+
+    # If not, move to the next aligned week
+    weeks_to_add = interval - (weeks_since_epoch % interval)
+    return next_weekday + datetime.timedelta(weeks=weeks_to_add)
 
 
 def _weekday_index(day: str) -> int:
