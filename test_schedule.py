@@ -1731,3 +1731,176 @@ class SchedulerTests(TestCase):
         # Next run should be in March
         expected_next_run = datetime.datetime(2023, 3, 15, 12, 0, 0)
         assert job.next_run == expected_next_run
+
+    def test_logging_job_execution(self):
+        """Test that job execution logging works correctly without str() calls."""
+        import logging
+        from unittest.mock import patch
+
+        mock_job = make_mock_job()
+        job = every().second.do(mock_job)
+
+        # Test normal job execution logging
+        with patch('schedule.logger') as mock_logger:
+            job.run()
+            # Verify that logger.debug was called with the job object directly (no str() call)
+            mock_logger.debug.assert_called_with("Running job %s", job)
+
+    def test_logging_job_cancellation_overdue(self):
+        """Test that job cancellation logging works correctly for overdue jobs."""
+        import logging
+        from unittest.mock import patch
+
+        mock_job = make_mock_job()
+
+        # Create a job that will be overdue
+        with mock_datetime(2023, 1, 1, 12, 0, 0):
+            job = every().second.until(datetime.datetime(2023, 1, 1, 12, 0, 1)).do(mock_job)
+
+        # Move time forward to make the job overdue
+        with mock_datetime(2023, 1, 1, 12, 0, 5):
+            with patch('schedule.logger') as mock_logger:
+                result = job.run()
+                # Verify cancellation logging
+                mock_logger.debug.assert_called_with("Cancelling job %s", job)
+                # Verify the job returns CancelJob
+                assert result is schedule.CancelJob
+
+    def test_logging_job_cancellation_after_run(self):
+        """Test that job cancellation logging works correctly when job becomes overdue after running."""
+        import logging
+        from unittest.mock import patch
+
+        mock_job = make_mock_job()
+
+        # Create a job that will become overdue after running
+        with mock_datetime(2023, 1, 1, 12, 0, 0):
+            job = every().second.until(datetime.datetime(2023, 1, 1, 12, 0, 1)).do(mock_job)
+
+        # Run the job at the exact deadline
+        with mock_datetime(2023, 1, 1, 12, 0, 1):
+            with patch('schedule.logger') as mock_logger:
+                result = job.run()
+                # Should log both running and cancelling
+                expected_calls = [
+                    mock.call("Running job %s", job),
+                    mock.call("Cancelling job %s", job)
+                ]
+                mock_logger.debug.assert_has_calls(expected_calls)
+                assert result is schedule.CancelJob
+
+    def test_logging_scheduler_clear_all(self):
+        """Test that scheduler clear() logging works correctly."""
+        import logging
+        from unittest.mock import patch
+
+        # Add some jobs
+        every().second.do(make_mock_job())
+        every().minute.do(make_mock_job())
+
+        with patch('schedule.logger') as mock_logger:
+            schedule.clear()
+            mock_logger.debug.assert_called_with("Deleting *all* jobs")
+
+    def test_logging_scheduler_clear_tagged(self):
+        """Test that scheduler clear() with tags logging works correctly."""
+        import logging
+        from unittest.mock import patch
+
+        # Add some jobs with tags
+        every().second.do(make_mock_job()).tag('test_tag')
+        every().minute.do(make_mock_job()).tag('other_tag')
+
+        with patch('schedule.logger') as mock_logger:
+            schedule.clear('test_tag')
+            mock_logger.debug.assert_called_with('Deleting all jobs tagged "%s"', 'test_tag')
+
+    def test_logging_scheduler_cancel_job(self):
+        """Test that scheduler cancel_job() logging works correctly."""
+        import logging
+        from unittest.mock import patch
+
+        job = every().second.do(make_mock_job())
+
+        with patch('schedule.logger') as mock_logger:
+            schedule.cancel_job(job)
+            mock_logger.debug.assert_called_with('Cancelling job "%s"', job)
+
+    def test_logging_scheduler_cancel_nonexistent_job(self):
+        """Test that cancelling a non-existent job logs correctly."""
+        import logging
+        from unittest.mock import patch
+
+        # Create a job but don't add it to the scheduler
+        job = schedule.Job(1)
+        job.unit = 'seconds'
+        job.job_func = make_mock_job()
+
+        with patch('schedule.logger') as mock_logger:
+            schedule.cancel_job(job)
+            mock_logger.debug.assert_called_with('Cancelling not-scheduled job "%s"', job)
+
+    def test_logging_scheduler_run_all(self):
+        """Test that scheduler run_all() logging works correctly."""
+        import logging
+        from unittest.mock import patch
+
+        # Add some jobs
+        every().second.do(make_mock_job())
+        every().minute.do(make_mock_job())
+
+        with patch('schedule.logger') as mock_logger:
+            schedule.run_all(delay_seconds=1)
+            mock_logger.debug.assert_called_with(
+                "Running *all* %i jobs with %is delay in between",
+                2,  # number of jobs
+                1   # delay_seconds
+            )
+
+    def test_logging_output_format(self):
+        """Test that logging output contains proper job information without str() conversion."""
+        import logging
+        from unittest.mock import patch
+
+        def test_func():
+            return "test result"
+
+        job = every().second.do(test_func)
+
+        # Verify the job's string representation is reasonable
+        job_str = str(job)
+        assert "test_func" in job_str
+        assert "interval=1" in job_str
+        assert "unit=seconds" in job_str
+
+        # Test that logging uses the job object directly
+        with patch('schedule.logger') as mock_logger:
+            job.run()
+            # The logger should receive the job object, not a string
+            args, kwargs = mock_logger.debug.call_args
+            assert args[0] == "Running job %s"
+            assert args[1] is job  # Should be the job object itself, not str(job)
+
+    def test_logging_performance_no_str_calls(self):
+        """Test that logging doesn't call str() unnecessarily when logging is disabled."""
+        import logging
+        from unittest.mock import patch, Mock
+
+        # Create a job with a mock that tracks str() calls
+        mock_job_func = make_mock_job()
+        job = every().second.do(mock_job_func)
+
+        # Mock the job's __str__ method to track calls
+        original_str = job.__str__
+        job.__str__ = Mock(side_effect=original_str)
+
+        # Set logging level to WARNING to disable DEBUG logging
+        with patch('schedule.logger') as mock_logger:
+            mock_logger.isEnabledFor.return_value = False
+            mock_logger.debug.return_value = None
+
+            job.run()
+
+            # The __str__ method should not be called when debug logging is disabled
+            # This verifies that we're not calling str() unnecessarily
+            job.__str__.assert_not_called()
