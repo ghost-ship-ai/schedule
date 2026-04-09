@@ -1754,3 +1754,30 @@ class SchedulerTests(TestCase):
         # Next run should be in March
         expected_next_run = datetime.datetime(2023, 3, 15, 12, 0, 0)
         assert job.next_run == expected_next_run
+
+    def test_logging_without_unnecessary_str_calls(self):
+        """Test that logging statements work correctly without unnecessary str() calls."""
+        import logging
+        from unittest.mock import patch
+
+        mock_job = make_mock_job()
+        job = every().second.do(mock_job)
+
+        # Test cancel_job logging
+        with patch("schedule.logger.debug") as mock_debug:
+            schedule.cancel_job(job)
+            # Verify that logger.debug was called with the job object directly
+            mock_debug.assert_called_with('Cancelling job "%s"', job)
+
+        # Test cancel_job logging for non-existent job
+        with patch("schedule.logger.debug") as mock_debug:
+            schedule.cancel_job(
+                job
+            )  # Job already cancelled, should trigger ValueError path
+            # Verify that logger.debug was called with the job object directly
+            mock_debug.assert_called_with('Cancelling not-scheduled job "%s"', job)
+
+        # Test that job.__str__ method is working correctly
+        job_str = str(job)
+        assert "Job(interval=1, unit=seconds" in job_str
+        assert "do=job" in job_str
