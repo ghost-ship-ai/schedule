@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 import sys
 
+
 def test_thread_safety_issue():
     """
     Reproduce the thread safety issue where jobs fire too often when
@@ -27,7 +28,9 @@ def test_thread_safety_issue():
         nonlocal execution_count
         with execution_lock:
             execution_count += 1
-            print(f"{datetime.now().isoformat()} - task execution #{execution_count} - thread {threading.current_thread().name}")
+            print(
+                f"{datetime.now().isoformat()} - task execution #{execution_count} - thread {threading.current_thread().name}"
+            )
 
     # Schedule a job to run every 1 second
     schedule.every(1).seconds.do(do_task)
@@ -35,7 +38,9 @@ def test_thread_safety_issue():
     def run_scheduler():
         while True:
             schedule.run_pending()
-            time.sleep(0.01)  # Check very frequently to increase chance of race condition
+            time.sleep(
+                0.01
+            )  # Check very frequently to increase chance of race condition
 
     # Four threads sharing the default scheduler to increase contention
     threads = []
@@ -63,11 +68,16 @@ def test_thread_safety_issue():
     # If we have significantly more executions than expected, we have the thread safety issue
     expected_executions = int(duration / 1)
     if execution_count > expected_executions * 1.3:  # Allow some tolerance
-        print(f"❌ THREAD SAFETY ISSUE DETECTED: {execution_count} executions vs expected ~{expected_executions}")
+        print(
+            f"❌ THREAD SAFETY ISSUE DETECTED: {execution_count} executions vs expected ~{expected_executions}"
+        )
         return False
     else:
-        print(f"✅ Thread safety appears to be working: {execution_count} executions vs expected ~{expected_executions}")
+        print(
+            f"✅ Thread safety appears to be working: {execution_count} executions vs expected ~{expected_executions}"
+        )
         return True
+
 
 if __name__ == "__main__":
     success = test_thread_safety_issue()

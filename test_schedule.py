@@ -1828,8 +1828,9 @@ class ThreadSafetyTests(TestCase):
             t.join()
 
         # The job should have been executed exactly once, not multiple times
-        self.assertEqual(execution_count, 1,
-                        "Job was executed multiple times due to race condition")
+        self.assertEqual(
+            execution_count, 1, "Job was executed multiple times due to race condition"
+        )
 
     def test_concurrent_job_scheduling_and_execution(self):
         """Test that jobs can be scheduled and executed concurrently without issues."""
@@ -1843,12 +1844,15 @@ class ThreadSafetyTests(TestCase):
             def test_job():
                 with execution_lock:
                     execution_counts[job_id] = execution_counts.get(job_id, 0) + 1
+
             return test_job
 
         def schedule_jobs():
             """Schedule multiple jobs from different threads."""
             for i in range(5):
-                schedule.every(1).seconds.do(make_test_job(f"job_{threading.current_thread().name}_{i}"))
+                schedule.every(1).seconds.do(
+                    make_test_job(f"job_{threading.current_thread().name}_{i}")
+                )
 
         def run_scheduler():
             """Run the scheduler in a loop."""
@@ -2009,7 +2013,10 @@ class ThreadSafetyTests(TestCase):
         def make_job(scheduler_id):
             def job():
                 with execution_lock:
-                    execution_counts[scheduler_id] = execution_counts.get(scheduler_id, 0) + 1
+                    execution_counts[scheduler_id] = (
+                        execution_counts.get(scheduler_id, 0) + 1
+                    )
+
             return job
 
         def worker(scheduler_id):
