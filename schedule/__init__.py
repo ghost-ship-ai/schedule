@@ -930,11 +930,17 @@ class Job:
             period = datetime.timedelta(**{self.unit: interval})
 
             # For weekly jobs with a specific weekday and interval > 1,
-            # _move_to_next_weekday_with_interval already calculated the correct next occurrence
-            # so we don't need to add periods or use the while loop
+            # _move_to_next_weekday_with_interval calculated the next occurrence,
+            # but we still need to check if it's in the past (e.g., target time already passed today)
             if self.unit == "weeks" and self.start_day is not None and interval > 1:
-                # Multi-week job with specific weekday - next_run is already correct
-                pass
+                # Multi-week job with specific weekday - check if we need to move to next interval
+                if next_run <= now:
+                    # The calculated time is in the past, move to next interval cycle
+                    next_run = _move_to_next_weekday_with_interval(
+                        next_run + datetime.timedelta(weeks=interval), self.start_day, interval
+                    )
+                    if self.at_time is not None:
+                        next_run = self._move_to_at_time(next_run)
             else:
                 # For other cases (non-weekly, or weekly without specific day, or single week)
                 # use the standard period addition logic
@@ -1189,15 +1195,26 @@ def _move_to_next_weekday_with_interval(moment: datetime.datetime, weekday: str,
     if remainder == 0:
         # We're in a valid interval week, check if target day is today or later this week
         days_ahead = weekday_index - moment.weekday()
-        if days_ahead >= 0:
-            # Target day is today or later this week
+        if days_ahead > 0:
+            # Target day is later this week
             return moment + datetime.timedelta(days=days_ahead)
+        elif days_ahead == 0:
+            # Target day is today - return today (time check will be handled later)
+            return moment
+        else:
+            # days_ahead < 0: target day already passed this week
+            # Go to next week and check if that's a valid interval week
+            next_week_start = moment + datetime.timedelta(days=7 + days_ahead)
+            next_week_since_epoch = ((next_week_start.date() - epoch.date()).days) // 7
+            next_remainder = next_week_since_epoch % interval
+            if next_remainder == 0:
+                # Next week is also a valid interval week, use it
+                return next_week_start
+            # Otherwise fall through to find next valid interval week
 
-    # Either we're not in a valid interval week, or the target day already passed this week
-    # Find the next valid interval week
+    # Either we're not in a valid interval week, or we need to find the next valid interval week
     if remainder == 0:
-        # We're in a valid interval week but target day already passed
-        # Go to the next interval cycle
+        # We were in a valid interval week but need to find the next valid one
         weeks_to_add = interval
     else:
         # We're not in a valid interval week
