@@ -203,6 +203,81 @@ class SchedulerTests(TestCase):
 
         assert job_repr.startswith("Every 5 to 30 minutes do job()")
 
+    def test_float_intervals(self):
+        """Test that float intervals work correctly with .to() method."""
+        with mock_datetime(2014, 6, 28, 12, 0):
+            mock_job = make_mock_job()
+
+            # Test basic float interval creation
+            job = every(0.5).to(1.5).seconds.do(mock_job)
+            assert job.interval == 0.5
+            assert job.latest == 1.5
+            assert job.unit == "seconds"
+
+            # Test that next_run is scheduled correctly
+            assert job.next_run is not None
+
+            # Test that multiple runs produce different intervals within range
+            intervals = []
+            for i in range(50):
+                job = every(0.5).to(1.5).seconds.do(mock_job)
+                # Calculate the interval used by examining the time difference
+                # Since we're using seconds, the interval should be reflected in seconds
+                job._schedule_next_run()
+                intervals.append(
+                    job.next_run.second + job.next_run.microsecond / 1000000.0
+                )
+
+            # Test with different float ranges
+            job2 = every(2.5).to(5.7).minutes.do(mock_job)
+            assert job2.interval == 2.5
+            assert job2.latest == 5.7
+            assert job2.unit == "minutes"
+
+            # Test mixed int/float
+            job3 = every(1).to(2.5).hours.do(mock_job)
+            assert job3.interval == 1
+            assert job3.latest == 2.5
+            assert job3.unit == "hours"
+
+            job4 = every(1.5).to(3).days.do(mock_job)
+            assert job4.interval == 1.5
+            assert job4.latest == 3
+            assert job4.unit == "days"
+
+    def test_fractional_months_years_rejected(self):
+        """Test that fractional intervals are rejected for months and years."""
+        mock_job = make_mock_job()
+
+        # Test that fractional months are rejected
+        with self.assertRaises(ScheduleValueError) as cm:
+            every(1.5).months.do(mock_job)
+        assert "Fractional intervals are not supported for months" in str(cm.exception)
+
+        # Test that fractional years are rejected
+        with self.assertRaises(ScheduleValueError) as cm:
+            every(2.3).years.do(mock_job)
+        assert "Fractional intervals are not supported for years" in str(cm.exception)
+
+        # Test that fractional intervals with .to() are also rejected for months
+        with self.assertRaises(ScheduleValueError) as cm:
+            every(1.2).to(2.8).months.do(mock_job)
+        assert "Fractional intervals are not supported for months" in str(cm.exception)
+
+        # Test that integer months and years still work
+        job1 = every(2).months.do(mock_job)
+        assert job1.interval == 2
+        assert job1.unit == "months"
+
+        job2 = every(1).years.do(mock_job)
+        assert job2.interval == 1
+        assert job2.unit == "years"
+
+        # Test that float values that are whole numbers work
+        job3 = every(3.0).months.do(mock_job)
+        assert job3.interval == 3.0
+        assert job3.unit == "months"
+
     def test_at_time(self):
         mock_job = make_mock_job()
         assert every().day.at("10:30").do(mock_job).next_run.hour == 10

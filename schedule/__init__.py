@@ -213,7 +213,7 @@ class Scheduler:
             except ValueError:
                 logger.debug('Cancelling not-scheduled job "%s"', job)
 
-    def every(self, interval: int = 1) -> "Job":
+    def every(self, interval: Union[int, float] = 1) -> "Job":
         """
         Schedule a new periodic job.
 
@@ -392,9 +392,13 @@ class Job:
     method, which also defines its `interval`.
     """
 
-    def __init__(self, interval: int, scheduler: Optional[Scheduler] = None):
-        self.interval: int = interval  # pause interval * unit between runs
-        self.latest: Optional[int] = None  # upper limit to the interval
+    def __init__(
+        self, interval: Union[int, float], scheduler: Optional[Scheduler] = None
+    ):
+        self.interval: Union[
+            int, float
+        ] = interval  # pause interval * unit between runs
+        self.latest: Optional[Union[int, float]] = None  # upper limit to the interval
         self.job_func: Optional[functools.partial] = None  # the job job_func to run
 
         # time units, e.g. 'minutes', 'hours', ...
@@ -723,7 +727,7 @@ class Job:
         self.at_time = datetime.time(hour, minute, second)
         return self
 
-    def to(self, latest: int):
+    def to(self, latest: Union[int, float]):
         """
         Schedule the job to run at an irregular (randomized) interval.
 
@@ -904,9 +908,18 @@ class Job:
         if self.latest is not None:
             if not (self.latest >= self.interval):
                 raise ScheduleError("`latest` is greater than `interval`")
-            interval = random.randint(self.interval, self.latest)
+            interval = random.uniform(self.interval, self.latest)
         else:
             interval = self.interval
+
+        # Validate that months and years use integer intervals
+        if self.unit in ("months", "years"):
+            if not isinstance(interval, int) and not interval.is_integer():
+                raise ScheduleValueError(
+                    f"Fractional intervals are not supported for {self.unit}. "
+                    f"Use integer values only."
+                )
+            interval = int(interval)
 
         # Do all computation in the context of the requested timezone
         now = datetime.datetime.now(self.at_time_zone)
@@ -923,16 +936,18 @@ class Job:
 
         # Handle months and years differently since they can't use timedelta
         if self.unit in ("months", "years"):
+            # interval is guaranteed to be int for months/years due to validation
+            int_interval = int(interval)
             if self.unit == "months":
-                if interval != 1:
-                    next_run = _add_months_years(next_run, months=interval)
+                if int_interval != 1:
+                    next_run = _add_months_years(next_run, months=int_interval)
                 while next_run <= now:
-                    next_run = _add_months_years(next_run, months=interval)
+                    next_run = _add_months_years(next_run, months=int_interval)
             else:  # years
-                if interval != 1:
-                    next_run = _add_months_years(next_run, years=interval)
+                if int_interval != 1:
+                    next_run = _add_months_years(next_run, years=int_interval)
                 while next_run <= now:
-                    next_run = _add_months_years(next_run, years=interval)
+                    next_run = _add_months_years(next_run, years=int_interval)
         else:
             period = datetime.timedelta(**{self.unit: interval})
             if interval != 1 and self.start_day is None:
@@ -1051,7 +1066,7 @@ default_scheduler = Scheduler()
 jobs = default_scheduler.jobs  # todo: should this be a copy, e.g. jobs()?
 
 
-def every(interval: int = 1) -> Job:
+def every(interval: Union[int, float] = 1) -> Job:
     """Calls :meth:`every <Scheduler.every>` on the
     :data:`default scheduler instance <default_scheduler>`.
     """
