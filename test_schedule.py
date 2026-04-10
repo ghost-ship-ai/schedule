@@ -125,7 +125,6 @@ class SchedulerTests(TestCase):
         with self.assertRaises(IntervalError):
             job_instance.week
 
-
         # test an invalid unit
         job_instance.unit = "foo"
         self.assertRaises(ScheduleValueError, job_instance.at, "1:0:0")
@@ -233,7 +232,6 @@ class SchedulerTests(TestCase):
             every(interval=2).day
         with self.assertRaises(IntervalError):
             every(interval=2).week
-
 
     def test_until_time(self):
         mock_job = make_mock_job()
