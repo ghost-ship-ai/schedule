@@ -1544,6 +1544,43 @@ class SchedulerTests(TestCase):
         schedule.cancel_job(mj)
         assert len(schedule.jobs) == 0
 
+    def test_cancel_job_return_value(self):
+        """Test that cancel_job() returns True when job is found and False when job is not found."""
+        mock_job = make_mock_job()
+
+        # Test cancelling a job that exists
+        job = every().second.do(mock_job)
+        assert len(schedule.jobs) == 1
+
+        # First cancellation should return True (job was found and cancelled)
+        result = schedule.cancel_job(job)
+        assert result is True
+        assert len(schedule.jobs) == 0
+
+        # Second cancellation should return False (job was not found)
+        result = schedule.cancel_job(job)
+        assert result is False
+        assert len(schedule.jobs) == 0
+
+        # Test with scheduler instance method as well
+        job2 = every().second.do(mock_job)
+        assert len(schedule.jobs) == 1
+
+        # First cancellation should return True
+        result = schedule.default_scheduler.cancel_job(job2)
+        assert result is True
+        assert len(schedule.jobs) == 0
+
+        # Second cancellation should return False
+        result = schedule.default_scheduler.cancel_job(job2)
+        assert result is False
+        assert len(schedule.jobs) == 0
+
+        # Test cancelling a job that was never scheduled
+        unscheduled_job = schedule.Job(1, schedule.default_scheduler)
+        result = schedule.cancel_job(unscheduled_job)
+        assert result is False
+
     def test_cancel_jobs(self):
         def stop_job():
             return schedule.CancelJob
