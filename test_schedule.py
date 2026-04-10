@@ -224,7 +224,9 @@ class SchedulerTests(TestCase):
                 # Calculate the interval used by examining the time difference
                 # Since we're using seconds, the interval should be reflected in seconds
                 job._schedule_next_run()
-                intervals.append(job.next_run.second + job.next_run.microsecond / 1000000.0)
+                intervals.append(
+                    job.next_run.second + job.next_run.microsecond / 1000000.0
+                )
 
             # Test with different float ranges
             job2 = every(2.5).to(5.7).minutes.do(mock_job)
