@@ -938,10 +938,9 @@ class Job:
             if interval != 1 and self.start_day is None:
                 next_run += period
 
-            # Ensure timezone-aware comparison for advancement
+            # For timezone-aware jobs, ensure consistent timezone conversion
             if self.at_time_zone is not None:
-                # For timezone-aware jobs, ensure both times are compared in the same timezone
-                # This prevents issues when next_run and now have different timezone representations
+                # Convert both times to the target timezone for accurate comparison
                 comparison_now = now.astimezone(self.at_time_zone)
                 comparison_next_run = next_run.astimezone(self.at_time_zone)
 
