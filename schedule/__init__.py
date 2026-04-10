@@ -958,7 +958,9 @@ class Job:
                 next_run += period
                 # Update comparison_next_run with the advanced next_run
                 if self.at_time_zone is not None:
-                    comparison_next_run = next_run.astimezone(self.at_time_zone)
+                    comparison_next_run = next_run.astimezone(
+                        self.at_time_zone
+                    )
                 else:
                     comparison_next_run = next_run
 
