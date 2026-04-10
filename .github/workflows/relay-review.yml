@@ -48,10 +48,10 @@ jobs:
           echo "fix_rounds=${FIX_ROUNDS}" >> "$GITHUB_OUTPUT"
           echo "Fix rounds so far: ${FIX_ROUNDS}"
 
-          if [ "$FIX_ROUNDS" -ge 3 ]; then
-            echo "Max fix rounds (3) reached. Escalating to manual review."
+          if [ "$FIX_ROUNDS" -ge 2 ]; then
+            echo "Max fix rounds (2) reached. Escalating to manual review."
             gh issue comment "$PR_NUMBER" --repo "${{ github.repository }}" \
-              --body "This PR has been through 3 automated review rounds without resolution. Labeling for manual review."
+              --body "This PR has been through 2 automated review rounds without resolution. Labeling for manual review."
             gh issue edit "$PR_NUMBER" --repo "${{ github.repository }}" --add-label "manual-review"
             echo "escalated=true" >> "$GITHUB_OUTPUT"
           else
