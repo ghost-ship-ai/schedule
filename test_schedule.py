@@ -243,6 +243,39 @@ class SchedulerTests(TestCase):
             assert job4.latest == 3
             assert job4.unit == "days"
 
+    def test_fractional_months_years_rejected(self):
+        """Test that fractional intervals are rejected for months and years."""
+        mock_job = make_mock_job()
+
+        # Test that fractional months are rejected
+        with self.assertRaises(ScheduleValueError) as cm:
+            every(1.5).months.do(mock_job)
+        assert "Fractional intervals are not supported for months" in str(cm.exception)
+
+        # Test that fractional years are rejected
+        with self.assertRaises(ScheduleValueError) as cm:
+            every(2.3).years.do(mock_job)
+        assert "Fractional intervals are not supported for years" in str(cm.exception)
+
+        # Test that fractional intervals with .to() are also rejected for months
+        with self.assertRaises(ScheduleValueError) as cm:
+            every(1.2).to(2.8).months.do(mock_job)
+        assert "Fractional intervals are not supported for months" in str(cm.exception)
+
+        # Test that integer months and years still work
+        job1 = every(2).months.do(mock_job)
+        assert job1.interval == 2
+        assert job1.unit == "months"
+
+        job2 = every(1).years.do(mock_job)
+        assert job2.interval == 1
+        assert job2.unit == "years"
+
+        # Test that float values that are whole numbers work
+        job3 = every(3.0).months.do(mock_job)
+        assert job3.interval == 3.0
+        assert job3.unit == "months"
+
     def test_at_time(self):
         mock_job = make_mock_job()
         assert every().day.at("10:30").do(mock_job).next_run.hour == 10
