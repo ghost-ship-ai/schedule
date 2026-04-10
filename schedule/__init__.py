@@ -200,18 +200,21 @@ class Scheduler:
                 logger.debug('Deleting all jobs tagged "%s"', tag)
                 self.jobs[:] = (job for job in self.jobs if tag not in job.tags)
 
-    def cancel_job(self, job: "Job") -> None:
+    def cancel_job(self, job: "Job") -> bool:
         """
         Delete a scheduled job.
 
         :param job: The job to be unscheduled
+        :return: True if the job was found and cancelled, False otherwise
         """
         with self._lock:
             try:
                 logger.debug('Cancelling job "%s"', job)
                 self.jobs.remove(job)
+                return True
             except ValueError:
                 logger.debug('Cancelling not-scheduled job "%s"', job)
+                return False
 
     def every(self, interval: Union[int, float] = 1) -> "Job":
         """
@@ -1115,11 +1118,13 @@ def clear(tag: Optional[Hashable] = None) -> None:
     default_scheduler.clear(tag)
 
 
-def cancel_job(job: Job) -> None:
+def cancel_job(job: Job) -> bool:
     """Calls :meth:`cancel_job <Scheduler.cancel_job>` on the
     :data:`default scheduler instance <default_scheduler>`.
+
+    :return: True if the job was found and cancelled, False otherwise
     """
-    default_scheduler.cancel_job(job)
+    return default_scheduler.cancel_job(job)
 
 
 def next_run(tag: Optional[Hashable] = None) -> Optional[datetime.datetime]:
