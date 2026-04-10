@@ -392,8 +392,12 @@ class Job:
     method, which also defines its `interval`.
     """
 
-    def __init__(self, interval: Union[int, float], scheduler: Optional[Scheduler] = None):
-        self.interval: Union[int, float] = interval  # pause interval * unit between runs
+    def __init__(
+        self, interval: Union[int, float], scheduler: Optional[Scheduler] = None
+    ):
+        self.interval: Union[
+            int, float
+        ] = interval  # pause interval * unit between runs
         self.latest: Optional[Union[int, float]] = None  # upper limit to the interval
         self.job_func: Optional[functools.partial] = None  # the job job_func to run
 
@@ -901,6 +905,16 @@ class Job:
                 "Invalid unit (valid units are `seconds`, `minutes`, `hours`, "
                 "`days`, `weeks`, `months`, and `years`)"
             )
+
+        # Validate that months and years use integer intervals
+        if self.unit in ("months", "years"):
+            if not isinstance(self.interval, int) or (
+                self.latest is not None and not isinstance(self.latest, int)
+            ):
+                raise ScheduleValueError(
+                    f"Float intervals are not supported for {self.unit}. "
+                    "Use integer values only."
+                )
         if self.latest is not None:
             if not (self.latest >= self.interval):
                 raise ScheduleError("`latest` is greater than `interval`")
@@ -923,16 +937,18 @@ class Job:
 
         # Handle months and years differently since they can't use timedelta
         if self.unit in ("months", "years"):
+            # Cast to int since we've validated these are integers
+            interval_int = int(interval)
             if self.unit == "months":
-                if interval != 1:
-                    next_run = _add_months_years(next_run, months=interval)
+                if interval_int != 1:
+                    next_run = _add_months_years(next_run, months=interval_int)
                 while next_run <= now:
-                    next_run = _add_months_years(next_run, months=interval)
+                    next_run = _add_months_years(next_run, months=interval_int)
             else:  # years
-                if interval != 1:
-                    next_run = _add_months_years(next_run, years=interval)
+                if interval_int != 1:
+                    next_run = _add_months_years(next_run, years=interval_int)
                 while next_run <= now:
-                    next_run = _add_months_years(next_run, years=interval)
+                    next_run = _add_months_years(next_run, years=interval_int)
         else:
             period = datetime.timedelta(**{self.unit: interval})
             if interval != 1 and self.start_day is None:
