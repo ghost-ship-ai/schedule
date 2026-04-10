@@ -203,6 +203,41 @@ class SchedulerTests(TestCase):
 
         assert job_repr.startswith("Every 5 to 30 minutes do job()")
 
+    def test_float_intervals(self):
+        """Test that float intervals work correctly with .to() method"""
+        with mock_datetime(2014, 6, 28, 12, 0):
+            mock_job = make_mock_job()
+
+            # Test that float intervals can be created without error
+            job = every(0.5).to(1.5).seconds.do(mock_job)
+            assert job.interval == 0.5
+            assert job.latest == 1.5
+            assert job.next_run is not None
+
+            # Test that random intervals fall within the expected range
+            # Choose a sample size large enough that it's unlikely the
+            # same value will be chosen each time.
+            intervals = []
+            for i in range(100):
+                job = every(0.5).to(1.5).seconds.do(mock_job)
+                # Calculate the interval used by checking the difference from now
+                now = datetime.datetime(2014, 6, 28, 12, 0)
+                interval_used = (job.next_run - now).total_seconds()
+                intervals.append(interval_used)
+
+            # Verify that we get different intervals (randomness)
+            assert len(set(intervals)) > 1
+            # Verify all intervals are within the expected range
+            assert all(0.5 <= interval <= 1.5 for interval in intervals)
+            # Verify we get values near both ends of the range
+            assert min(intervals) < 0.8  # Should get values close to 0.5
+            assert max(intervals) > 1.2  # Should get values close to 1.5
+
+            # Test with different float values
+            job2 = every(2.5).to(3.7).minutes.do(mock_job)
+            assert job2.interval == 2.5
+            assert job2.latest == 3.7
+
     def test_at_time(self):
         mock_job = make_mock_job()
         assert every().day.at("10:30").do(mock_job).next_run.hour == 10
