@@ -51,7 +51,7 @@ import random
 import re
 import threading
 import time
-from typing import Set, List, Optional, Callable, Union, Coroutine, Any
+from typing import Set, List, Optional, Callable, Union
 
 logger = logging.getLogger("schedule")
 
@@ -225,10 +225,11 @@ class Scheduler:
 
     def _run_job(self, job: "Job") -> None:
         ret = job.run()
-        # For async jobs, job.run() returns a coroutine that should be handled
-        # by the async scheduler. For sync jobs, handle normally.
+        # For async jobs, job.run() returns a coroutine that should be
+        # handled by the async scheduler. For sync jobs, handle normally.
         if asyncio.iscoroutine(ret):
-            # This should not happen in sync context - async jobs should use async_run_pending
+            # This should not happen in sync context - async jobs should
+            # use async_run_pending
             logger.warning("Async job %s called in sync context, skipping", job)
             return
         if isinstance(ret, CancelJob) or ret is CancelJob:
@@ -393,13 +394,16 @@ class Job:
     """
 
     def __init__(
-        self, interval: Union[int, float], scheduler: Optional[Scheduler] = None
+        self,
+        interval: Union[int, float],
+        scheduler: Optional[Scheduler] = None,
     ):
-        self.interval: Union[
-            int, float
-        ] = interval  # pause interval * unit between runs
-        self.latest: Optional[Union[int, float]] = None  # upper limit to the interval
-        self.job_func: Optional[functools.partial] = None  # the job job_func to run
+        self.interval: Union[int, float] = interval
+        # pause interval * unit between runs
+        self.latest: Optional[Union[int, float]] = None
+        # upper limit to the interval
+        self.job_func: Optional[functools.partial] = None
+        # the job job_func to run
 
         # time units, e.g. 'minutes', 'hours', ...
         self.unit: Optional[str] = None
@@ -407,7 +411,8 @@ class Job:
         # optional time at which this job runs
         self.at_time: Optional[datetime.time] = None
 
-        # optional time zone of the self.at_time field. Only relevant when at_time is not None
+        # optional time zone of the self.at_time field.
+        # Only relevant when at_time is not None
         self.at_time_zone = None
 
         # datetime of the last run
