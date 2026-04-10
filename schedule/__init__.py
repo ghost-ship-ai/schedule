@@ -947,7 +947,9 @@ class Job:
                     comparison_now = comparison_now.astimezone(self.at_time_zone)
                 comparison_next_run = next_run
                 if comparison_next_run.tzinfo != self.at_time_zone:
-                    comparison_next_run = comparison_next_run.astimezone(self.at_time_zone)
+                    comparison_next_run = comparison_next_run.astimezone(
+                        self.at_time_zone
+                    )
             else:
                 comparison_now = now
                 comparison_next_run = next_run
