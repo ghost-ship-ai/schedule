@@ -938,6 +938,33 @@ class Job:
             if interval != 1 and self.start_day is None:
                 next_run += period
 
+            # Handle DST fall-back: if we're at the same local time but next_run <= now,
+            # check if there's a second occurrence (fold=1) on the same day
+            print(f"DEBUG: DST check - next_run={next_run}, now={now}")
+            print(f"DEBUG: next_run <= now: {next_run <= now}")
+            print(f"DEBUG: Time match: {next_run.hour == now.hour and next_run.minute == now.minute and next_run.second == now.second}")
+            if (self.at_time_zone is not None and self.at_time is not None and
+                next_run <= now and
+                next_run.hour == now.hour and next_run.minute == now.minute and next_run.second == now.second):
+                print(f"DEBUG: DST condition met!")
+                try:
+                    # Try to create the same time with fold=1 (second occurrence)
+                    # Use pytz's localize with is_dst=False to get the second occurrence
+                    import datetime as dt_module
+                    naive_time = dt_module.datetime(next_run.year, next_run.month, next_run.day,
+                                                 next_run.hour, next_run.minute, next_run.second)
+                    next_run_fold1 = self.at_time_zone.localize(naive_time, is_dst=False)
+                    print(f"DEBUG: next_run_fold1={next_run_fold1}")
+
+                    # If fold=1 gives us a different UTC time, we're in a DST fall-back
+                    if next_run_fold1.utcoffset() != next_run.utcoffset() and next_run_fold1 > now:
+                        print(f"DEBUG: Using fold=1!")
+                        # Use the second occurrence (fold=1)
+                        next_run = next_run_fold1
+                except (AttributeError, TypeError):
+                    # Handle cases where fold attribute is not available or timezone doesn't support it
+                    pass
+
             while next_run <= now:
                 next_run += period
 

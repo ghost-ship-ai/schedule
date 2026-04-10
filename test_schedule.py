@@ -1173,6 +1173,29 @@ class SchedulerTests(TestCase):
         with mock_datetime(2022, 10, 30, 0, 0):
             assert every(4).hours.do(mock_job).next_run.hour == 4
 
+    def test_dst_fallback_scheduling(self):
+        """Test that jobs scheduled during DST fall-back are handled correctly."""
+        mock_job = make_mock_job()
+
+        # Test case 1: Job created at 2:30 AM fold=0 (first occurrence) should be scheduled for 2:30 AM fold=1 (second occurrence)
+        # DST fall-back occurs on last Sunday of October 2023 (Oct 29) at 3:00 AM -> 2:00 AM
+        with mock_datetime(2023, 10, 29, 2, 30, fold=0):
+            # Schedule a job for 2:30 AM
+            job = every().day.at("02:30", "Europe/Berlin").do(mock_job)
+
+            # The job should be scheduled for the same day at 2:30 AM (second occurrence)
+            assert job.next_run.day == 29
+            assert job.next_run.hour == 2
+            assert job.next_run.minute == 30
+
+        # Test case 2: Job created at 2:30 AM fold=1 (second occurrence) should run immediately
+        with mock_datetime(2023, 10, 29, 2, 30, fold=1):
+            # Schedule a job for 2:30 AM
+            job = every().day.at("02:30", "Europe/Berlin").do(mock_job)
+
+            # The job should be ready to run (should_run should be True)
+            assert job.should_run
+
     def test_move_to_next_weekday_today(self):
         monday = datetime.datetime(2024, 5, 13, 10, 27, 54)
         tuesday = schedule._move_to_next_weekday(monday, "monday")
