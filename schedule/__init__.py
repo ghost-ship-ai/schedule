@@ -942,7 +942,6 @@ class Job:
             # Convert both times to the same timezone for accurate comparison
             if self.at_time_zone is not None:
                 # Ensure both times are in the target timezone for comparison
-                # next_run should already be in the target timezone, but ensure now is too
                 comparison_now = now
                 if comparison_now.tzinfo != next_run.tzinfo:
                     comparison_now = comparison_now.astimezone(self.at_time_zone)
@@ -953,7 +952,14 @@ class Job:
 
             while comparison_next_run <= comparison_now:
                 next_run += period
-                comparison_next_run = next_run
+                # Ensure timezone consistency after advancing next_run
+                if (
+                    self.at_time_zone is not None
+                    and comparison_now.tzinfo != next_run.tzinfo
+                ):
+                    comparison_next_run = next_run.astimezone(comparison_now.tzinfo)
+                else:
+                    comparison_next_run = next_run
 
         next_run = self._correct_utc_offset(
             next_run, fixate_time=(self.at_time is not None)
