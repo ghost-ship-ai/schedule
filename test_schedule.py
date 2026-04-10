@@ -1734,6 +1734,64 @@ class SchedulerTests(TestCase):
         self.assertIn(job1, jobs)
         self.assertIn(job2, jobs)
 
+    def test_timezone_midnight_immediate_execution(self):
+        """Test that a job scheduled for 00:00 in a timezone when current time is 15:00 does not execute immediately."""
+        mock_job = self.make_tz_mock_job()
+        with mock_datetime(2023, 7, 15, 13, 0, 0):  # 13:00 UTC = 15:00 Berlin time
+            # Current Berlin time: 15:00 (past midnight)
+            # Expected to run Berlin time: tomorrow 00:00
+            # Next run local time: tomorrow 00:00 (converted to local timezone)
+            schedule.clear()
+            job = every().day.at("00:00", "Europe/Berlin").do(mock_job)
+
+            # Job should NOT run immediately
+            self.assertFalse(job.should_run)
+
+            # Next run should be tomorrow at 00:00 in local time
+            self.assertEqual(job.next_run.day, 16)  # Tomorrow
+            self.assertEqual(job.next_run.hour, 0)   # Midnight local time
+            self.assertEqual(job.next_run.minute, 0)
+
+            # run_pending should not execute the job
+            jobs_before = len(schedule.jobs)
+            schedule.run_pending()
+            jobs_after = len(schedule.jobs)
+            self.assertEqual(jobs_before, jobs_after)  # Job should not be removed
+
+    def test_timezone_midnight_various_offsets(self):
+        """Test midnight scheduling with various timezone offsets to ensure consistent behavior."""
+        mock_job = self.make_tz_mock_job()
+
+        # Test with different timezones and current times past midnight
+        test_cases = [
+            # (current_utc_time, timezone, description)
+            ((2023, 7, 15, 13, 0, 0), "Europe/Berlin", "15:00 Berlin time"),
+            ((2023, 7, 15, 5, 0, 0), "Asia/Tokyo", "14:00 Tokyo time"),
+            ((2023, 7, 15, 15, 0, 0), "America/Los_Angeles", "08:00 LA time"),
+            ((2023, 7, 15, 23, 30, 0), "UTC", "23:30 UTC time"),
+        ]
+
+        for utc_time, timezone, description in test_cases:
+            with self.subTest(timezone=timezone, description=description):
+                with mock_datetime(*utc_time):
+                    schedule.clear()
+                    job = every().day.at("00:00", timezone).do(mock_job)
+
+                    # Job should NOT run immediately
+                    self.assertFalse(job.should_run, f"Job in {timezone} should not run immediately")
+
+                    # The key test: next_run should be in the future
+                    current_time = datetime.datetime.now()
+                    self.assertGreater(job.next_run, current_time,
+                                     f"Job in {timezone} should be scheduled for the future")
+
+                    # Verify the job doesn't execute immediately
+                    jobs_before = len(schedule.jobs)
+                    schedule.run_pending()
+                    jobs_after = len(schedule.jobs)
+                    self.assertEqual(jobs_before, jobs_after,
+                                   f"Job in {timezone} should not be removed from schedule")
+
 
 class ThreadSafetyTests(TestCase):
     """Test thread safety of the scheduler."""

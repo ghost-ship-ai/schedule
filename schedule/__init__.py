@@ -938,8 +938,19 @@ class Job:
             if interval != 1 and self.start_day is None:
                 next_run += period
 
-            while next_run <= now:
+            # Ensure timezone-aware comparison for advancement
+            # Convert both times to the same timezone for accurate comparison
+            if self.at_time_zone is not None:
+                # Both next_run and now should be in the target timezone
+                comparison_now = now
+                comparison_next_run = next_run
+            else:
+                comparison_now = now
+                comparison_next_run = next_run
+
+            while comparison_next_run <= comparison_now:
                 next_run += period
+                comparison_next_run = next_run
 
         next_run = self._correct_utc_offset(
             next_run, fixate_time=(self.at_time is not None)
