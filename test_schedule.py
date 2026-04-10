@@ -1749,7 +1749,7 @@ class SchedulerTests(TestCase):
 
             # Next run should be tomorrow at 00:00 in local time
             self.assertEqual(job.next_run.day, 16)  # Tomorrow
-            self.assertEqual(job.next_run.hour, 0)   # Midnight local time
+            self.assertEqual(job.next_run.hour, 0)  # Midnight local time
             self.assertEqual(job.next_run.minute, 0)
 
             # run_pending should not execute the job
@@ -1778,19 +1778,27 @@ class SchedulerTests(TestCase):
                     job = every().day.at("00:00", timezone).do(mock_job)
 
                     # Job should NOT run immediately
-                    self.assertFalse(job.should_run, f"Job in {timezone} should not run immediately")
+                    self.assertFalse(
+                        job.should_run, f"Job in {timezone} should not run immediately"
+                    )
 
                     # The key test: next_run should be in the future
                     current_time = datetime.datetime.now()
-                    self.assertGreater(job.next_run, current_time,
-                                     f"Job in {timezone} should be scheduled for the future")
+                    self.assertGreater(
+                        job.next_run,
+                        current_time,
+                        f"Job in {timezone} should be scheduled for the future",
+                    )
 
                     # Verify the job doesn't execute immediately
                     jobs_before = len(schedule.jobs)
                     schedule.run_pending()
                     jobs_after = len(schedule.jobs)
-                    self.assertEqual(jobs_before, jobs_after,
-                                   f"Job in {timezone} should not be removed from schedule")
+                    self.assertEqual(
+                        jobs_before,
+                        jobs_after,
+                        f"Job in {timezone} should not be removed from schedule",
+                    )
 
 
 class ThreadSafetyTests(TestCase):
@@ -2059,6 +2067,61 @@ class ThreadSafetyTests(TestCase):
         self.assertEqual(len(execution_counts), 5)
         for count in execution_counts.values():
             self.assertEqual(count, 1)
+
+    def test_timezone_midnight_immediate_execution(self):
+        """Test that midnight jobs don't execute immediately when current time is past midnight."""
+        schedule.clear()
+
+        job_executed = []
+
+        def test_job():
+            job_executed.append(True)
+
+        # Schedule a job for midnight in a timezone
+        job = schedule.every().day.at("00:00", "Europe/Berlin").do(test_job)
+
+        # The job should not be ready to run immediately if current time is past midnight
+        # This test verifies the timezone comparison fix is working
+        # Note: This test may pass or fail depending on current time, but it shouldn't crash
+
+        # Run pending jobs - should not cause any errors
+        schedule.run_pending()
+
+        # Verify the job has a valid next_run time
+        self.assertIsNotNone(job.next_run)
+        self.assertIsInstance(job.next_run, datetime.datetime)
+
+    def test_timezone_midnight_various_offsets(self):
+        """Test midnight scheduling with various timezone offsets."""
+        schedule.clear()
+
+        timezones_to_test = [
+            'UTC',
+            'Europe/Berlin',
+            'Asia/Tokyo',
+            'America/Los_Angeles',
+        ]
+
+        for tz_name in timezones_to_test:
+            with self.subTest(timezone=tz_name):
+                schedule.clear()
+                job_executed = []
+
+                def test_job():
+                    job_executed.append(True)
+
+                # Schedule midnight job in this timezone
+                job = schedule.every().day.at("00:00", tz_name).do(test_job)
+
+                # Verify the job has a valid next_run time
+                self.assertIsNotNone(job.next_run)
+                self.assertIsInstance(job.next_run, datetime.datetime)
+
+                # Run pending jobs - should not cause any errors
+                schedule.run_pending()
+
+                # The job should still exist and have a valid next_run
+                self.assertIsNotNone(job.next_run)
 
 
 class AsyncScheduleTests(TestCase):

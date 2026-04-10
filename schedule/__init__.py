@@ -941,23 +941,22 @@ class Job:
             # Ensure timezone-aware comparison for advancement
             # Convert both times to the same timezone for accurate comparison
             if self.at_time_zone is not None:
-                # Ensure both times are in the target timezone for comparison
+                # Convert both times to the target timezone for consistent comparison
                 comparison_now = now
-                if comparison_now.tzinfo != next_run.tzinfo:
+                if comparison_now.tzinfo != self.at_time_zone:
                     comparison_now = comparison_now.astimezone(self.at_time_zone)
                 comparison_next_run = next_run
+                if comparison_next_run.tzinfo != self.at_time_zone:
+                    comparison_next_run = comparison_next_run.astimezone(self.at_time_zone)
             else:
                 comparison_now = now
                 comparison_next_run = next_run
 
             while comparison_next_run <= comparison_now:
                 next_run += period
-                # Ensure timezone consistency after advancing next_run
-                if (
-                    self.at_time_zone is not None
-                    and comparison_now.tzinfo != next_run.tzinfo
-                ):
-                    comparison_next_run = next_run.astimezone(comparison_now.tzinfo)
+                # Update comparison_next_run with the advanced next_run
+                if self.at_time_zone is not None:
+                    comparison_next_run = next_run.astimezone(self.at_time_zone)
                 else:
                     comparison_next_run = next_run
 
