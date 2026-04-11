@@ -145,9 +145,11 @@ class Scheduler:
                 len(self.jobs),
                 delay_seconds,
             )
-            for job in self.jobs[:]:
+            jobs = self.jobs[:]
+            for i, job in enumerate(jobs):
                 await self._async_run_job(job)
-                if delay_seconds > 0:
+                # Only sleep between jobs, not after the last one
+                if delay_seconds > 0 and i < len(jobs) - 1:
                     await asyncio.sleep(delay_seconds)
 
     def run_all(self, delay_seconds: int = 0) -> None:
@@ -166,9 +168,11 @@ class Scheduler:
                 len(self.jobs),
                 delay_seconds,
             )
-            for job in self.jobs[:]:
+            jobs = self.jobs[:]
+            for i, job in enumerate(jobs):
                 self._run_job(job)
-                if delay_seconds > 0:
+                # Only sleep between jobs, not after the last one
+                if delay_seconds > 0 and i < len(jobs) - 1:
                     time.sleep(delay_seconds)
 
     def get_jobs(self, tag: Optional[Hashable] = None) -> List["Job"]:

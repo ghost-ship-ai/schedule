@@ -1338,20 +1338,24 @@ class SchedulerTests(TestCase):
         elapsed_time = time.time() - start_time
 
         # Should complete very quickly (less than 0.1 seconds) since no sleeps
-        assert elapsed_time < 0.1, f"run_all(delay_seconds=0) took {elapsed_time:.3f}s, expected < 0.1s"
+        assert (
+            elapsed_time < 0.1
+        ), f"run_all(delay_seconds=0) took {elapsed_time:.3f}s, expected < 0.1s"
         assert mock_job.call_count == 3
 
         # Reset for next test
         mock_job.reset_mock()
 
-        # Test with delay_seconds=0.1 and 3 jobs - should take at least 0.3s (3 delays)
+        # Test with delay_seconds=0.1 and 3 jobs - should take at least 0.2s (2 delays)
         start_time = time.time()
         schedule.run_all(delay_seconds=0.1)
         elapsed_time = time.time() - start_time
 
-        # Should take approximately 0.3s (3 delays for 3 jobs)
+        # Should take approximately 0.2s (2 delays between 3 jobs, no delay after last job)
         # Allow some tolerance for execution time
-        assert 0.25 < elapsed_time < 0.4, f"run_all(delay_seconds=0.1) took {elapsed_time:.3f}s, expected ~0.3s"
+        assert (
+            0.15 < elapsed_time < 0.3
+        ), f"run_all(delay_seconds=0.1) took {elapsed_time:.3f}s, expected ~0.2s"
         assert mock_job.call_count == 3
 
     def test_to_string(self):
