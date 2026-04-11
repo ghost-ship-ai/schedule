@@ -961,6 +961,47 @@ class Job:
             if interval != 1 and self.start_day is None:
                 next_run += period
 
+            # Handle DST fall-back: if next_run is at the same local time as now
+            # but is not strictly in the future due to an ambiguous hour during
+            # DST fall-back (e.g., 02:30 occurs twice), try selecting the second
+            # occurrence (fold=1) before advancing to the next period.
+            if (
+                self.at_time_zone is not None
+                and self.at_time is not None
+                and next_run <= now
+                and next_run.hour == now.hour
+                and next_run.minute == now.minute
+                and next_run.second == now.second
+            ):
+                # First try using PEP-495 fold semantics where supported
+                try:
+                    candidate = next_run.replace(fold=1)
+                    candidate = self.at_time_zone.normalize(candidate)
+                    if (
+                        candidate.utcoffset() != next_run.utcoffset()
+                        and candidate > now
+                    ):
+                        next_run = candidate
+                except Exception:
+                    # ignore and fall through to pytz handling below
+                    pass
+
+                # If still not adjusted, try pytz disambiguation explicitly
+                try:
+                    import pytz  # type: ignore
+
+                    if isinstance(self.at_time_zone, pytz.BaseTzInfo):
+                        naive = next_run.replace(tzinfo=None)
+                        candidate = self.at_time_zone.localize(naive, is_dst=False)
+                        if (
+                            candidate.utcoffset() != next_run.utcoffset()
+                            and candidate > now
+                        ):
+                            next_run = candidate
+                except Exception:
+                    # Be conservative: if anything goes wrong, fall back to default logic
+                    pass
+
             # Ensure timezone-aware comparison for advancement
             # Convert both times to the same timezone for accurate comparison
             if self.at_time_zone is not None:

@@ -681,6 +681,31 @@ class SchedulerTests(TestCase):
             assert job.next_run.hour == 2
             assert job.next_run.minute == 30
 
+    def test_dst_fallback_scheduling(self):
+        """Ensure scheduling handles ambiguous hour during DST fall-back correctly.
+
+        When current time is exactly at the first occurrence of an ambiguous time
+        (fold=0), the job should be scheduled for the second occurrence on the same
+        day. When current time is at the second occurrence (fold=1), the job should
+        run immediately.
+        """
+        mock_job = self.make_tz_mock_job()
+
+        # Berlin DST fall-back in 2023 occurs on Oct 29 (03:00 -> 02:00)
+        # First occurrence (fold=0): schedule should pick the second occurrence on same day
+        with mock_datetime(2023, 10, 29, 2, 30, fold=0):
+            job = every().day.at("02:30", "Europe/Berlin").do(mock_job)
+            assert job.next_run.day == 29
+            assert job.next_run.hour == 2
+            assert job.next_run.minute == 30
+            # Should not run yet; we expect the second occurrence later this hour
+            assert not job.should_run
+
+        # Second occurrence (fold=1): scheduling for 02:30 should run immediately
+        with mock_datetime(2023, 10, 29, 2, 30, fold=1):
+            job2 = every().day.at("02:30", "Europe/Berlin").do(mock_job)
+            assert job2.should_run
+
     def test_tz_daily_exact_future_scheduling(self):
         mock_job = self.make_tz_mock_job()
         with mock_datetime(2022, 3, 20, 10, 0):
