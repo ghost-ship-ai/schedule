@@ -978,26 +978,28 @@ class Job:
                 and next_run.second == now.second
             ):
                 # First try using PEP-495 fold semantics where supported
+                # Also consult the local wall-clock fold (from naive now()) to
+                # decide whether we are currently in the first (fold=0) or
+                # second (fold=1) occurrence. This avoids ambiguity introduced
+                # by conversions performed by astimezone()/normalize when used
+                # with pytz and naive datetimes.
+                local_now_naive = datetime.datetime.now()
+                if local_now_naive.fold == 1:
+                    # We are at the second occurrence now; this job should run
+                    # immediately. Avoid advancing to the next period.
+                    skip_advance = True
+                    second_fold_run_now = True
                 try:
                     candidate = next_run.replace(fold=1)
                     candidate = self.at_time_zone.normalize(candidate)
-                    if (
-                        candidate.utcoffset() != next_run.utcoffset()
-                        and candidate > now
-                    ):
-                        next_run = candidate
-                        # Ensure that naive comparison in should_run treats this
-                        # as a future moment, even though the local wall clock
-                        # reads the same HH:MM:SS for both folds. We add a tiny
-                        # offset so that datetime.now() >= next_run becomes False
-                        # in tests at fold=0 without changing displayed HH:MM.
-                        next_run += datetime.timedelta(microseconds=1)
-                    elif candidate == now:
-                        # We're already at the second occurrence (fold=1) now,
-                        # so this job should run immediately. Avoid advancing
-                        # to the next period by skipping the increment loop.
-                        skip_advance = True
-                        second_fold_run_now = True
+                    if candidate.utcoffset() != next_run.utcoffset():
+                        if local_now_naive.fold == 0:
+                            # We are at the first occurrence; schedule the
+                            # second occurrence later this hour. Add a tiny
+                            # microsecond to make should_run False for fold=0.
+                            next_run = candidate + datetime.timedelta(
+                                microseconds=1
+                            )
                 except Exception:
                     # ignore and fall through to pytz handling below
                     pass
@@ -1009,19 +1011,11 @@ class Job:
                     if isinstance(self.at_time_zone, pytz.BaseTzInfo):
                         naive = next_run.replace(tzinfo=None)
                         candidate = self.at_time_zone.localize(naive, is_dst=False)
-                        if (
-                            candidate.utcoffset() != next_run.utcoffset()
-                            and candidate > now
-                        ):
-                            next_run = candidate
-                            # See note above: keep naive next_run strictly after now
-                            # while still representing the same wall time occurrence.
-                            next_run += datetime.timedelta(microseconds=1)
-                        elif candidate == now:
-                            # Now is already the second occurrence (standard time)
-                            # at the requested wall clock. Do not advance.
-                            skip_advance = True
-                            second_fold_run_now = True
+                        if candidate.utcoffset() != next_run.utcoffset():
+                            if local_now_naive.fold == 0:
+                                next_run = candidate + datetime.timedelta(
+                                    microseconds=1
+                                )
                 except Exception:
                     # Be conservative: if anything goes wrong, fall back to default logic
                     pass
