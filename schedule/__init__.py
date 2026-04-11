@@ -943,6 +943,9 @@ class Job:
             next_run = self._move_to_at_time(next_run)
 
         # Handle months and years differently since they can't use timedelta
+        # Flag used to indicate we are exactly at the second occurrence of an
+        # ambiguous time during DST fall-back and should NOT advance.
+        second_fold_run_now = False
         if self.unit in ("months", "years"):
             # interval is guaranteed to be int for months/years due to validation
             int_interval = int(interval)
@@ -961,6 +964,60 @@ class Job:
             if interval != 1 and self.start_day is None:
                 next_run += period
 
+            # Handle DST fall-back: if next_run is at the same local time as now
+            # but is not strictly in the future due to an ambiguous hour during
+            # DST fall-back (e.g., 02:30 occurs twice), try selecting the second
+            # occurrence (fold=1) before advancing to the next period.
+            skip_advance = False
+            if (
+                self.at_time_zone is not None
+                and self.at_time is not None
+                and next_run <= now
+                and next_run.hour == now.hour
+                and next_run.minute == now.minute
+                and next_run.second == now.second
+            ):
+                # First try using PEP-495 fold semantics where supported
+                # Also consult the local wall-clock fold (from naive now()) to
+                # decide whether we are currently in the first (fold=0) or
+                # second (fold=1) occurrence. This avoids ambiguity introduced
+                # by conversions performed by astimezone()/normalize when used
+                # with pytz and naive datetimes.
+                local_now_naive = datetime.datetime.now()
+                if local_now_naive.fold == 1:
+                    # We are at the second occurrence now; this job should run
+                    # immediately. Avoid advancing to the next period.
+                    skip_advance = True
+                    second_fold_run_now = True
+                try:
+                    candidate = next_run.replace(fold=1)
+                    candidate = self.at_time_zone.normalize(candidate)
+                    if candidate.utcoffset() != next_run.utcoffset():
+                        if local_now_naive.fold == 0:
+                            # We are at the first occurrence; schedule the
+                            # second occurrence later this hour. Add a tiny
+                            # microsecond to make should_run False for fold=0.
+                            next_run = candidate + datetime.timedelta(microseconds=1)
+                except Exception:
+                    # ignore and fall through to pytz handling below
+                    pass
+
+                # If still not adjusted, try pytz disambiguation explicitly
+                try:
+                    import pytz  # type: ignore
+
+                    if isinstance(self.at_time_zone, pytz.BaseTzInfo):
+                        naive = next_run.replace(tzinfo=None)
+                        candidate = self.at_time_zone.localize(naive, is_dst=False)
+                        if candidate.utcoffset() != next_run.utcoffset():
+                            if local_now_naive.fold == 0:
+                                next_run = candidate + datetime.timedelta(
+                                    microseconds=1
+                                )
+                except Exception:
+                    # Be conservative: if anything goes wrong, fall back to default logic
+                    pass
+
             # Ensure timezone-aware comparison for advancement
             # Convert both times to the same timezone for accurate comparison
             if self.at_time_zone is not None:
@@ -971,9 +1028,10 @@ class Job:
                 comparison_now = now
                 comparison_next_run = next_run
 
-            while comparison_next_run <= comparison_now:
-                next_run += period
-                comparison_next_run = next_run
+            if not skip_advance:
+                while comparison_next_run <= comparison_now:
+                    next_run += period
+                    comparison_next_run = next_run
 
         next_run = self._correct_utc_offset(
             next_run, fixate_time=(self.at_time is not None)
@@ -981,7 +1039,10 @@ class Job:
 
         # After correcting for timezone (DST) the next_run might have moved back
         # to a moment in the past. Ensure it's in the future relative to 'now'.
-        if self.at_time is not None and next_run <= now:
+        # However, when we're exactly at the second occurrence of an ambiguous
+        # time during DST fall-back, we should allow the job to run immediately
+        # and must NOT advance to the next period.
+        if self.at_time is not None and next_run <= now and not second_fold_run_now:
             if self.unit in ("months", "years"):
                 # interval is already coerced to int for months/years above
                 int_interval = int(interval)
