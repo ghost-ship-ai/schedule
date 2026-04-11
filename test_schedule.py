@@ -389,36 +389,47 @@ class SchedulerTests(TestCase):
     def test_until_timezone_aware(self):
         """Test that until() works correctly with timezone-aware jobs."""
         import pytz
+
         mock_job = make_mock_job()
-        eastern = pytz.timezone('US/Eastern')
+        eastern = pytz.timezone("US/Eastern")
 
         # Test with timedelta on timezone-aware job
         with mock_datetime(2020, 1, 1, 10, 0, 0):
             schedule.clear()
-            job = every().day.at('10:00', tz=eastern).until(datetime.timedelta(hours=2)).do(mock_job)
+            job = (
+                every()
+                .day.at("10:00", tz=eastern)
+                .until(datetime.timedelta(hours=2))
+                .do(mock_job)
+            )
             # cancel_after should be timezone-aware
             assert job.cancel_after.tzinfo is not None
-            assert job.cancel_after.tzinfo.zone == 'US/Eastern'
+            assert job.cancel_after.tzinfo.zone == "US/Eastern"
             # Should not raise TypeError when comparing
             schedule.run_pending()
 
         # Test with datetime.time on timezone-aware job
         with mock_datetime(2020, 1, 1, 10, 0, 0):
             schedule.clear()
-            job = every().day.at('10:00', tz=eastern).until(datetime.time(23, 59)).do(mock_job)
+            job = (
+                every()
+                .day.at("10:00", tz=eastern)
+                .until(datetime.time(23, 59))
+                .do(mock_job)
+            )
             # cancel_after should be timezone-aware
             assert job.cancel_after.tzinfo is not None
-            assert job.cancel_after.tzinfo.zone == 'US/Eastern'
+            assert job.cancel_after.tzinfo.zone == "US/Eastern"
             # Should not raise TypeError when comparing
             schedule.run_pending()
 
         # Test with string time on timezone-aware job
         with mock_datetime(2020, 1, 1, 10, 0, 0):
             schedule.clear()
-            job = every().day.at('10:00', tz=eastern).until('23:59').do(mock_job)
+            job = every().day.at("10:00", tz=eastern).until("23:59").do(mock_job)
             # cancel_after should be timezone-aware
             assert job.cancel_after.tzinfo is not None
-            assert job.cancel_after.tzinfo.zone == 'US/Eastern'
+            assert job.cancel_after.tzinfo.zone == "US/Eastern"
             # Should not raise TypeError when comparing
             schedule.run_pending()
 
@@ -426,10 +437,10 @@ class SchedulerTests(TestCase):
         with mock_datetime(2020, 1, 1, 10, 0, 0):
             schedule.clear()
             aware_dt = eastern.localize(datetime.datetime(2020, 1, 2, 15, 0, 0))
-            job = every().day.at('10:00', tz=eastern).until(aware_dt).do(mock_job)
+            job = every().day.at("10:00", tz=eastern).until(aware_dt).do(mock_job)
             # cancel_after should be timezone-aware
             assert job.cancel_after.tzinfo is not None
-            assert job.cancel_after.tzinfo.zone == 'US/Eastern'
+            assert job.cancel_after.tzinfo.zone == "US/Eastern"
             # Should not raise TypeError when comparing
             schedule.run_pending()
 
@@ -440,7 +451,9 @@ class SchedulerTests(TestCase):
         # Test with timedelta on naive job
         with mock_datetime(2020, 1, 1, 10, 0, 0):
             schedule.clear()
-            job = every().day.at('10:00').until(datetime.timedelta(hours=2)).do(mock_job)
+            job = (
+                every().day.at("10:00").until(datetime.timedelta(hours=2)).do(mock_job)
+            )
             # cancel_after should be naive
             assert job.cancel_after.tzinfo is None
             # Should work as before
@@ -449,7 +462,7 @@ class SchedulerTests(TestCase):
         # Test with datetime.time on naive job
         with mock_datetime(2020, 1, 1, 10, 0, 0):
             schedule.clear()
-            job = every().day.at('10:00').until(datetime.time(23, 59)).do(mock_job)
+            job = every().day.at("10:00").until(datetime.time(23, 59)).do(mock_job)
             # cancel_after should be naive
             assert job.cancel_after.tzinfo is None
             # Should work as before
@@ -458,7 +471,7 @@ class SchedulerTests(TestCase):
         # Test with string time on naive job
         with mock_datetime(2020, 1, 1, 10, 0, 0):
             schedule.clear()
-            job = every().day.at('10:00').until('23:59').do(mock_job)
+            job = every().day.at("10:00").until("23:59").do(mock_job)
             # cancel_after should be naive
             assert job.cancel_after.tzinfo is None
             # Should work as before
