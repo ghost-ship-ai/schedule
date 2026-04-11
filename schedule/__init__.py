@@ -997,9 +997,7 @@ class Job:
                             # We are at the first occurrence; schedule the
                             # second occurrence later this hour. Add a tiny
                             # microsecond to make should_run False for fold=0.
-                            next_run = candidate + datetime.timedelta(
-                                microseconds=1
-                            )
+                            next_run = candidate + datetime.timedelta(microseconds=1)
                 except Exception:
                     # ignore and fall through to pytz handling below
                     pass
@@ -1044,11 +1042,7 @@ class Job:
         # However, when we're exactly at the second occurrence of an ambiguous
         # time during DST fall-back, we should allow the job to run immediately
         # and must NOT advance to the next period.
-        if (
-            self.at_time is not None
-            and next_run <= now
-            and not second_fold_run_now
-        ):
+        if self.at_time is not None and next_run <= now and not second_fold_run_now:
             if self.unit in ("months", "years"):
                 # interval is already coerced to int for months/years above
                 int_interval = int(interval)
