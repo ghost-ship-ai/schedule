@@ -782,11 +782,24 @@ class Job:
         if isinstance(until_time, datetime.datetime):
             self.cancel_after = until_time
         elif isinstance(until_time, datetime.timedelta):
-            self.cancel_after = datetime.datetime.now() + until_time
-        elif isinstance(until_time, datetime.time):
-            self.cancel_after = datetime.datetime.combine(
-                datetime.datetime.now(), until_time
+            now = (
+                datetime.datetime.now(self.at_time_zone)
+                if self.at_time_zone
+                else datetime.datetime.now()
             )
+            self.cancel_after = now + until_time
+        elif isinstance(until_time, datetime.time):
+            now = (
+                datetime.datetime.now(self.at_time_zone)
+                if self.at_time_zone
+                else datetime.datetime.now()
+            )
+            self.cancel_after = datetime.datetime.combine(now, until_time)
+            if self.at_time_zone:
+                # Need to localize the combined datetime since combine() strips timezone
+                self.cancel_after = self.at_time_zone.localize(
+                    self.cancel_after.replace(tzinfo=None)
+                )
         elif isinstance(until_time, str):
             cancel_after = self._decode_datetimestr(
                 until_time,
@@ -802,17 +815,31 @@ class Job:
                 raise ScheduleValueError("Invalid string format for until()")
             if "-" not in until_time:
                 # the until_time is a time-only format. Set the date to today
-                now = datetime.datetime.now()
+                now = (
+                    datetime.datetime.now(self.at_time_zone)
+                    if self.at_time_zone
+                    else datetime.datetime.now()
+                )
                 cancel_after = cancel_after.replace(
                     year=now.year, month=now.month, day=now.day
                 )
+                if self.at_time_zone:
+                    # Need to localize the combined datetime since replace() strips timezone
+                    cancel_after = self.at_time_zone.localize(
+                        cancel_after.replace(tzinfo=None)
+                    )
             self.cancel_after = cancel_after
         else:
             raise TypeError(
                 "until() takes a string, datetime.datetime, datetime.timedelta, "
                 "datetime.time parameter"
             )
-        if self.cancel_after < datetime.datetime.now():
+        comparison_now = (
+            datetime.datetime.now(self.at_time_zone)
+            if self.at_time_zone
+            else datetime.datetime.now()
+        )
+        if self.cancel_after < comparison_now:
             raise ScheduleValueError(
                 "Cannot schedule a job to run until a time in the past"
             )
