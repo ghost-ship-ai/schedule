@@ -943,6 +943,9 @@ class Job:
             next_run = self._move_to_at_time(next_run)
 
         # Handle months and years differently since they can't use timedelta
+        # Flag used to indicate we are exactly at the second occurrence of an
+        # ambiguous time during DST fall-back and should NOT advance.
+        second_fold_run_now = False
         if self.unit in ("months", "years"):
             # interval is guaranteed to be int for months/years due to validation
             int_interval = int(interval)
@@ -994,6 +997,7 @@ class Job:
                         # so this job should run immediately. Avoid advancing
                         # to the next period by skipping the increment loop.
                         skip_advance = True
+                        second_fold_run_now = True
                 except Exception:
                     # ignore and fall through to pytz handling below
                     pass
@@ -1017,6 +1021,7 @@ class Job:
                             # Now is already the second occurrence (standard time)
                             # at the requested wall clock. Do not advance.
                             skip_advance = True
+                            second_fold_run_now = True
                 except Exception:
                     # Be conservative: if anything goes wrong, fall back to default logic
                     pass
@@ -1042,7 +1047,14 @@ class Job:
 
         # After correcting for timezone (DST) the next_run might have moved back
         # to a moment in the past. Ensure it's in the future relative to 'now'.
-        if self.at_time is not None and next_run <= now:
+        # However, when we're exactly at the second occurrence of an ambiguous
+        # time during DST fall-back, we should allow the job to run immediately
+        # and must NOT advance to the next period.
+        if (
+            self.at_time is not None
+            and next_run <= now
+            and not second_fold_run_now
+        ):
             if self.unit in ("months", "years"):
                 # interval is already coerced to int for months/years above
                 int_interval = int(interval)
