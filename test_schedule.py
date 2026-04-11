@@ -1152,6 +1152,56 @@ class SchedulerTests(TestCase):
         with self.assertRaises(ScheduleValueError):
             every().day.at("10:30", 43).do(mock_job)
 
+    def test_timezone_midnight_immediate_execution(self):
+        """Tests that a job scheduled for 00:00 in a timezone when current time is 15:00 does not execute immediately."""
+        mock_job = self.make_tz_mock_job()
+        with mock_datetime(2023, 4, 14, 15, 0):
+            # Current Berlin time: april-14 15:00 (well past midnight)
+            # Expected to run Berlin time: april-15 00:00 (next midnight)
+            job = every().day.at("00:00", "Europe/Berlin").do(mock_job)
+
+            # The job should NOT run immediately since it's currently 15:00
+            # and the next midnight is tomorrow
+            assert (
+                not job.should_run
+            ), "Job should not run immediately when scheduled for past midnight"
+
+            # Next run should be tomorrow at midnight (converted to local time)
+            assert (
+                job.next_run.day == 15
+            ), f"Expected next run on day 15, got {job.next_run.day}"
+            assert (
+                job.next_run.hour == 0
+            ), f"Expected next run at hour 0, got {job.next_run.hour}"
+            assert (
+                job.next_run.minute == 0
+            ), f"Expected next run at minute 0, got {job.next_run.minute}"
+
+    def test_timezone_midnight_various_offsets(self):
+        """Tests midnight scheduling with various timezone offsets to ensure consistent behavior."""
+        mock_job = self.make_tz_mock_job()
+
+        # Test with UTC timezone
+        with mock_datetime(2023, 4, 14, 15, 0):
+            job_utc = every().day.at("00:00", "UTC").do(mock_job)
+            assert (
+                not job_utc.should_run
+            ), "UTC midnight job should not run immediately at 15:00"
+
+        # Test with Asia/Tokyo timezone (UTC+9)
+        with mock_datetime(2023, 4, 14, 15, 0):
+            job_tokyo = every().day.at("00:00", "Asia/Tokyo").do(mock_job)
+            assert (
+                not job_tokyo.should_run
+            ), "Tokyo midnight job should not run immediately at 15:00"
+
+        # Test with America/Los_Angeles timezone (UTC-8)
+        with mock_datetime(2023, 4, 14, 15, 0):
+            job_la = every().day.at("00:00", "America/Los_Angeles").do(mock_job)
+            assert (
+                not job_la.should_run
+            ), "Los Angeles midnight job should not run immediately at 15:00"
+
     def test_align_utc_offset_no_timezone(self):
         job = schedule.every().day.at("10:00").do(make_mock_job())
         now = datetime.datetime(2024, 5, 11, 10, 30, 55, 0)
