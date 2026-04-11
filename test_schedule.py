@@ -1321,6 +1321,39 @@ class SchedulerTests(TestCase):
         schedule.run_all()
         mock_job.assert_called_once_with(1, 2, "three", foo=23, bar={})
 
+    def test_run_all_delay_timing(self):
+        """Test that run_all() only sleeps when delay_seconds > 0."""
+        import time
+
+        mock_job = make_mock_job()
+
+        # Create 3 jobs
+        every().minute.do(mock_job)
+        every().hour.do(mock_job)
+        every().day.do(mock_job)
+
+        # Test with delay_seconds=0 - should execute quickly without any sleeps
+        start_time = time.time()
+        schedule.run_all(delay_seconds=0)
+        elapsed_time = time.time() - start_time
+
+        # Should complete very quickly (less than 0.1 seconds) since no sleeps
+        assert elapsed_time < 0.1, f"run_all(delay_seconds=0) took {elapsed_time:.3f}s, expected < 0.1s"
+        assert mock_job.call_count == 3
+
+        # Reset for next test
+        mock_job.reset_mock()
+
+        # Test with delay_seconds=0.1 and 3 jobs - should take at least 0.3s (3 delays)
+        start_time = time.time()
+        schedule.run_all(delay_seconds=0.1)
+        elapsed_time = time.time() - start_time
+
+        # Should take approximately 0.3s (3 delays for 3 jobs)
+        # Allow some tolerance for execution time
+        assert 0.25 < elapsed_time < 0.4, f"run_all(delay_seconds=0.1) took {elapsed_time:.3f}s, expected ~0.3s"
+        assert mock_job.call_count == 3
+
     def test_to_string(self):
         def job_fun():
             pass

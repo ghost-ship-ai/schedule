@@ -168,7 +168,8 @@ class Scheduler:
             )
             for job in self.jobs[:]:
                 self._run_job(job)
-                time.sleep(delay_seconds)
+                if delay_seconds > 0:
+                    time.sleep(delay_seconds)
 
     def get_jobs(self, tag: Optional[Hashable] = None) -> List["Job"]:
         """
