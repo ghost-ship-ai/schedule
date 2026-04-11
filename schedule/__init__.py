@@ -968,6 +968,24 @@ class Job:
             next_run, fixate_time=(self.at_time is not None)
         )
 
+
+        # After correcting for timezone (DST) the next_run might have moved back
+        # to a moment in the past. Ensure it's in the future relative to 'now'.
+        if self.at_time is not None and next_run <= now:
+            if self.unit in ("months", "years"):
+                # interval is already coerced to int for months/years above
+                int_interval = int(interval)
+                if self.unit == "months":
+                    next_run = _add_months_years(next_run, months=int_interval)
+                else:
+                    next_run = _add_months_years(next_run, years=int_interval)
+            else:
+                period = datetime.timedelta(**{self.unit: interval})
+                next_run += period
+            next_run = self._correct_utc_offset(
+                next_run, fixate_time=(self.at_time is not None)
+            )
+
         # To keep the api consistent with older versions, we have to set the 'next_run' to a naive timestamp in the local timezone.
         # Because we want to stay backwards compatible with older versions.
         if self.at_time_zone is not None:
