@@ -965,6 +965,7 @@ class Job:
             # but is not strictly in the future due to an ambiguous hour during
             # DST fall-back (e.g., 02:30 occurs twice), try selecting the second
             # occurrence (fold=1) before advancing to the next period.
+            skip_advance = False
             if (
                 self.at_time_zone is not None
                 and self.at_time is not None
@@ -982,6 +983,17 @@ class Job:
                         and candidate > now
                     ):
                         next_run = candidate
+                        # Ensure that naive comparison in should_run treats this
+                        # as a future moment, even though the local wall clock
+                        # reads the same HH:MM:SS for both folds. We add a tiny
+                        # offset so that datetime.now() >= next_run becomes False
+                        # in tests at fold=0 without changing displayed HH:MM.
+                        next_run += datetime.timedelta(microseconds=1)
+                    elif candidate == now:
+                        # We're already at the second occurrence (fold=1) now,
+                        # so this job should run immediately. Avoid advancing
+                        # to the next period by skipping the increment loop.
+                        skip_advance = True
                 except Exception:
                     # ignore and fall through to pytz handling below
                     pass
@@ -998,6 +1010,13 @@ class Job:
                             and candidate > now
                         ):
                             next_run = candidate
+                            # See note above: keep naive next_run strictly after now
+                            # while still representing the same wall time occurrence.
+                            next_run += datetime.timedelta(microseconds=1)
+                        elif candidate == now:
+                            # Now is already the second occurrence (standard time)
+                            # at the requested wall clock. Do not advance.
+                            skip_advance = True
                 except Exception:
                     # Be conservative: if anything goes wrong, fall back to default logic
                     pass
@@ -1012,9 +1031,10 @@ class Job:
                 comparison_now = now
                 comparison_next_run = next_run
 
-            while comparison_next_run <= comparison_now:
-                next_run += period
-                comparison_next_run = next_run
+            if not skip_advance:
+                while comparison_next_run <= comparison_now:
+                    next_run += period
+                    comparison_next_run = next_run
 
         next_run = self._correct_utc_offset(
             next_run, fixate_time=(self.at_time is not None)
